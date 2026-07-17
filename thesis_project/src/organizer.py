@@ -35,6 +35,22 @@ _SECTION_HINT = {
     "conclusion": ["总结", "结论", "展望", "结束", "未来", "conclusion"],
 }
 
+# 常见章节名 / 结构性标题 —— 不能当论文题目
+_GENERIC_HEADING = re.compile(
+    r"^(第\s*[一二三四五六七八九十百\d]+\s*[章节部分]"
+    r"|\d+(\.\d+)*[\s、.．]"
+    r"|[一二三四五六七八九十]+[、.．]"
+    r"|绪论|引言|前言|导论|概述|摘\s*要|abstract|目\s*录|结论|总结|展望"
+    r"|参考文献|致\s*谢|附\s*录|关键词"
+    r"|相关(理论|技术|工作)|文献综述|研究(背景|现状|意义|内容|方法)"
+    r"|国内外研究现状|需求分析|系统设计|系统实现|实验|测试)",
+    re.IGNORECASE,
+)
+
+
+def _looks_generic(title: str) -> bool:
+    return bool(_GENERIC_HEADING.match(title.strip()))
+
 
 # ---------------------------------------------------------------------------
 #  抽取标题 / 作者 / 摘要 / 关键词
@@ -56,7 +72,8 @@ def _extract_meta(docs):
     all_blocks = [b for d in docs for b in d["blocks"]]
     for i, b in enumerate(all_blocks):
         t = b["text"]
-        if not title and b["kind"] == "heading" and b["level"] <= 1 and t:
+        if (not title and b["kind"] == "heading" and b["level"] <= 1
+                and t and not _looks_generic(t)):
             title = t
         # 摘要
         if abstract is None and re.match(r"^(摘\s*要|abstract)", t, re.I):
