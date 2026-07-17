@@ -88,8 +88,6 @@ def _footer(slide, idx, total, title):
     p = tf.paragraphs[0]
     r = p.add_run(); r.text = title[:30]
     _set_font(r, 10, MUTED)
-    p2 = tf.add_paragraph()  # 右侧页码用第二段模拟——改为同段右对齐
-    # 用制表符不易控，直接放页码到右侧文本框
     tf2 = _textbox(slide, W_IN - 1.5, H_IN - 0.45, 1.0, 0.35)
     pp = tf2.paragraphs[0]; pp.alignment = PP_ALIGN.RIGHT
     rr = pp.add_run(); rr.text = f"{idx} / {total}"

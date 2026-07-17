@@ -15,7 +15,11 @@
 from __future__ import annotations
 import re
 
+from config.format_spec import PPT_SPEC
+
 PLACEHOLDER = "<请填写>"
+
+_MAX_BULLETS_PER_SLIDE = PPT_SPEC["layout"]["max_bullets_per_slide"]
 
 # 本科论文标准章节骨架（识别不到标题时使用）
 DEFAULT_CHAPTERS = [
@@ -222,7 +226,7 @@ def _table_to_text(block):
 # ---------------------------------------------------------------------------
 #  提炼要点（给 PPT）
 # ---------------------------------------------------------------------------
-def _to_bullets(paras, max_bullets=6, max_len=40):
+def _to_bullets(paras, max_bullets=12, max_len=40):
     bullets = []
     for p in paras:
         # 按句号/分号切，取较短句作要点
@@ -230,7 +234,11 @@ def _to_bullets(paras, max_bullets=6, max_len=40):
             seg = seg.strip()
             if len(seg) < 4:
                 continue
-            bullets.append(seg[:max_len] + ("…" if len(seg) > max_len else ""))
+            if len(seg) > max_len:
+                cut = max(seg.rfind(c, 0, max_len + 1) for c in "，、,")
+                seg = seg[:cut] if cut >= max_len // 2 else seg[:max_len]
+                seg += "…"
+            bullets.append(seg)
             if len(bullets) >= max_bullets:
                 return bullets
     return bullets or ["<待补充要点>"]
@@ -300,9 +308,13 @@ def _build_deck(meta, chapters):
             continue
         slides.append({"type": "section", "title": label[key]})
         for item in group:
-            slides.append({"type": "content",
-                           "title": item["title"],
-                           "bullets": item["bullets"]})
+            bullets = item["bullets"]
+            chunks = [bullets[i:i + _MAX_BULLETS_PER_SLIDE]
+                      for i in range(0, len(bullets), _MAX_BULLETS_PER_SLIDE)]
+            for pi, chunk in enumerate(chunks):
+                title = item["title"] if pi == 0 else f"{item['title']}（续）"
+                slides.append({"type": "content", "title": title,
+                               "bullets": chunk})
 
     slides.append({"type": "thanks", "title": "致  谢",
                    "subtitle": "恳请各位老师批评指正"})
