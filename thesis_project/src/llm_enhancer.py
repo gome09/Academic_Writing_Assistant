@@ -224,3 +224,30 @@ def rechapter(thesis: dict) -> None:
         new_chapters.insert(3, {"title": "研究内容", "level": 1,
                                 "paras": leftovers, "subs": []})
     thesis["chapters"] = new_chapters
+
+
+# ---------------------------------------------------------------------------
+#  总入口
+# ---------------------------------------------------------------------------
+def enhance(thesis: dict, deck: dict, docs: list):
+    """依次执行各增强步骤，每步独立容错；返回 (thesis, deck)。"""
+    if not is_available():
+        print("  [LLM] 未设置 LLM_API_KEY，跳过增强（使用纯规则结果）。")
+        return thesis, deck
+    steps = [
+        ("元信息抽取", lambda: refine_meta(thesis, docs)),
+        ("语义分章", lambda: rechapter(thesis)),
+        ("英文摘要翻译", lambda: translate_abstract(thesis)),
+    ]
+    for name, fn in steps:
+        try:
+            fn()
+            print(f"  [LLM] {name} 完成")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [LLM告警] {name} 失败，保留规则结果：{e}")
+    try:
+        deck = rebuild_deck(thesis)
+        print("  [LLM] PPT 大纲重建完成")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] PPT 大纲重建失败，保留规则结果：{e}")
+    return thesis, deck

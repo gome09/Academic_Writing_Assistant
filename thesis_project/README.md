@@ -53,12 +53,13 @@ python src/main.py --input a.pdf b.md 某目录   # 指定若干文件/目录
 python src/main.py --only word                 # 只生成 Word
 python src/main.py --only ppt                  # 只生成 PPT
 python src/main.py --output 某输出目录          # 自定义输出目录
+python src/main.py --llm                       # 用 LLM 增强草稿质量（可选）
 ```
 
 > **Windows 提示**：请用 `python`（不要用 `python3`，它可能是应用商店占位程序）。
 > 脚本已自动把控制台切到 UTF-8，中文不会乱码。
 
-依赖：`python-docx`、`python-pptx`、`pdfplumber`（读 PDF）。
+依赖：`python-docx`、`python-pptx`、`pdfplumber`（读 PDF）；`openai`（仅 --llm 需要）。
 ```bash
 pip install python-docx python-pptx pdfplumber
 ```
@@ -75,6 +76,32 @@ pip install python-docx python-pptx pdfplumber
 - **PDF / TXT**：按空行分段读取（PDF 无显式标题时，会套用标准章节骨架，把内容顺序填入）。
 
 识别不到的字段（题目、作者、英文摘要等）会留 `<请填写>` 占位符，方便你搜索替换。
+
+---
+
+## LLM 增强（可选）
+
+设置环境变量后加 `--llm` 即可启用，能显著提升草稿质量：
+
+| 环境变量 | 必填 | 说明 |
+|---|---|---|
+| `LLM_API_KEY` | 是 | API 密钥；未设置时自动跳过增强 |
+| `LLM_BASE_URL` | 否 | OpenAI 兼容端点，如 DeepSeek/通义/Kimi/本地 Ollama |
+| `LLM_MODEL` | 否 | 模型名，默认 `gpt-4o-mini` |
+
+增强内容：元信息抽取（题目/作者/摘要/关键词）、英文摘要与关键词翻译、
+PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档的语义分章。
+
+原则：LLM 只做整理/提炼/翻译/分类，不扩写正文；AI 生成的内容带
+`<AI生成，请核对>` 标记；任一步失败自动回退纯规则结果，主流程不受影响。
+
+```powershell
+# PowerShell 示例（DeepSeek）
+$env:LLM_API_KEY  = "sk-..."
+$env:LLM_BASE_URL = "https://api.deepseek.com"
+$env:LLM_MODEL    = "deepseek-chat"
+python src/main.py --llm
+```
 
 ---
 

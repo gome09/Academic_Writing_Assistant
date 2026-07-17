@@ -55,6 +55,9 @@ def main():
                     help="输入目录或文件（可多个）")
     ap.add_argument("--output", default=DEFAULT_OUTPUT, help="输出目录")
     ap.add_argument("--only", choices=["word", "ppt"], help="只生成其中一种")
+    ap.add_argument("--llm", action="store_true",
+                    help="用 LLM 增强草案质量（需设置 LLM_API_KEY，"
+                         "可选 LLM_BASE_URL / LLM_MODEL，OpenAI 兼容接口）")
     args = ap.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -71,6 +74,10 @@ def main():
 
     print("② 整理内容结构")
     thesis, deck = organize(docs)
+    if args.llm:
+        print("②+ LLM 增强")
+        from src import llm_enhancer
+        thesis, deck = llm_enhancer.enhance(thesis, deck, docs)
     print(f"  论文：{len(thesis['chapters'])} 章；PPT：{len(deck['slides'])} 页。")
 
     print("③ 生成草案")
