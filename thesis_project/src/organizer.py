@@ -138,18 +138,16 @@ def _build_chapters(docs):
                                             "paras": [], "subs": []})
                     chapters[0]["paras"].append(text)
     else:
-        # 无标题：套骨架，段落顺序填入"研究内容"章节
+        # 无标题：套标准骨架并留占位符；全部段落按原文顺序放入
+        # "研究内容"一章，保持叙述连贯（LLM 增强层可再做语义分章）。
+        for name in DEFAULT_CHAPTERS:
+            chapters.append({"title": name, "level": 1,
+                             "paras": [PLACEHOLDER], "subs": []})
         paras = [b["text"] for b in blocks if b["text"]]
-        for idx, name in enumerate(DEFAULT_CHAPTERS):
-            ch = {"title": name, "level": 1, "paras": [], "subs": []}
-            chapters.append(ch)
-        # 把已有段落均匀塞进中间几章（绪论/实现），避免全空
-        target_indices = [0, 3]  # 绪论、系统实现
-        for i, p in enumerate(paras):
-            ch = chapters[target_indices[i % len(target_indices)]]
-            ch["paras"].append(p)
+        chapters.insert(3, {"title": "研究内容", "level": 1,
+                            "paras": paras, "subs": []})
 
-    return chapters
+    return chapters, not has_heading
 
 
 def _table_to_text(block):
@@ -187,7 +185,7 @@ def _classify(title):
 # ---------------------------------------------------------------------------
 def organize(docs):
     meta = _extract_meta(docs)
-    chapters = _build_chapters(docs)
+    chapters, auto_skeleton = _build_chapters(docs)
 
     thesis = {
         "title": meta["title"],
@@ -197,6 +195,7 @@ def organize(docs):
         "keywords": meta["keywords"],
         "keywords_en": [PLACEHOLDER],
         "chapters": chapters,
+        "auto_skeleton": auto_skeleton,
         "references": [
             "示例. GB/T 7714 著录格式. 出版地: 出版者, 年份.  <请替换为真实文献>",
         ],
