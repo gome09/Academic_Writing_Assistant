@@ -57,3 +57,59 @@ def _chat_json(system: str, user: str):
         raise ValueError(f"LLM 未返回 JSON：{text[:80]!r}")
     obj, _ = json.JSONDecoder().raw_decode(text[min(starts):].strip())
     return obj
+
+
+# ---------------------------------------------------------------------------
+#  元信息抽取 / 英文摘要翻译
+# ---------------------------------------------------------------------------
+_META_SYS = ("你是论文排版助手。根据用户提供的论文草稿开头片段抽取元信息。"
+             "只能从原文归纳，禁止编造；无法确定的字段输出空字符串或空列表。")
+
+_EN_SYS = ("你是学术翻译。把给定的中文论文摘要与关键词翻译成规范的学术英文。"
+           "忠实原文，不添加原文没有的信息。")
+
+
+def refine_meta(thesis: dict, docs: list) -> None:
+    """就地补全 title/author/abstract/keywords 中仍为占位符的字段。"""
+    from src.organizer import PLACEHOLDER
+    need = [k for k in ("title", "author", "abstract")
+            if thesis[k] == PLACEHOLDER]
+    if thesis["keywords"] == [PLACEHOLDER]:
+        need.append("keywords")
+    if not need:
+        return
+    head = "\n".join(b["text"] for d in docs
+                     for b in d["blocks"][:40] if b["text"])[:3000]
+    data = _chat_json(
+        _META_SYS,
+        '请以 JSON 输出 {"title": "...", "author": "...", '
+        '"abstract": "...", "keywords": ["...", "..."]}：\n\n' + head)
+    for k in need:
+        v = data.get(k)
+        if not v:
+            continue
+        if k == "keywords":
+            thesis[k] = [str(x).strip() for x in v if str(x).strip()][:5]
+        elif k == "abstract":
+            thesis[k] = f"{str(v).strip()} {AI_MARK}"
+        else:
+            thesis[k] = str(v).strip()
+
+
+def translate_abstract(thesis: dict) -> None:
+    """中文摘要/关键词 -> 英文（就地写入 abstract_en / keywords_en）。"""
+    from src.organizer import PLACEHOLDER
+    ab = thesis["abstract"].replace(AI_MARK, "").strip()
+    if not ab or ab == PLACEHOLDER:
+        return
+    kws = [k for k in thesis["keywords"] if k != PLACEHOLDER]
+    data = _chat_json(
+        _EN_SYS,
+        '请以 JSON 输出 {"abstract_en": "...", "keywords_en": ["..."]}：\n\n'
+        f"摘要：{ab}\n关键词：{'；'.join(kws)}")
+    if data.get("abstract_en"):
+        thesis["abstract_en"] = f"{str(data['abstract_en']).strip()} {AI_MARK}"
+    if data.get("keywords_en"):
+        thesis["keywords_en"] = [str(x).strip()
+                                 for x in data["keywords_en"]
+                                 if str(x).strip()][:5]
