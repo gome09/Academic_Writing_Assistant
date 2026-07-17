@@ -175,3 +175,52 @@ def rebuild_deck(thesis: dict) -> dict:
     return _build_deck(meta, thesis["chapters"],
                        classify_fn=lambda t: mapping.get(t) or _classify(t),
                        bullets_fn=_safe_bullets)
+
+
+# ---------------------------------------------------------------------------
+#  无标题文档的语义分章
+# ---------------------------------------------------------------------------
+_CHAP_SYS = ("你是论文结构助手。把编号段落分配到给定的章节骨架中，"
+             "依据语义就近归类；不确定的段落可以不分配。"
+             "不得改写段落内容，每个编号至多出现一次。")
+
+
+def rechapter(thesis: dict) -> None:
+    """无标题文档：把"研究内容"中的段落按语义分配到骨架各章。
+
+    章内保持原文顺序；LLM 未分配的段落留在"研究内容"；全部失败则不动。
+    """
+    from src.organizer import PLACEHOLDER, DEFAULT_CHAPTERS
+    if not thesis.get("auto_skeleton"):
+        return
+    src = next((c for c in thesis["chapters"] if c["title"] == "研究内容"), None)
+    if src is None or not src["paras"]:
+        return
+    paras = src["paras"]
+    numbered = "\n".join(f"[{i}] {p[:200]}" for i, p in enumerate(paras))
+    data = _chat_json(
+        _CHAP_SYS,
+        "章节骨架：" + json.dumps(DEFAULT_CHAPTERS, ensure_ascii=False)
+        + '\n请以 JSON 输出 {"章节名": [段落编号, ...], ...}：\n\n' + numbered)
+    if not isinstance(data, dict):
+        return
+    used = set()
+    assign = {}
+    for name in DEFAULT_CHAPTERS:
+        idxs = sorted(i for i in data.get(name, [])
+                      if isinstance(i, int) and 0 <= i < len(paras)
+                      and i not in used)
+        used.update(idxs)
+        assign[name] = idxs
+    if not used:
+        return
+    new_chapters = []
+    for name in DEFAULT_CHAPTERS:
+        ps = [paras[i] for i in assign[name]] or [PLACEHOLDER]
+        new_chapters.append({"title": name, "level": 1,
+                             "paras": ps, "subs": []})
+    leftovers = [p for i, p in enumerate(paras) if i not in used]
+    if leftovers:
+        new_chapters.insert(3, {"title": "研究内容", "level": 1,
+                                "paras": leftovers, "subs": []})
+    thesis["chapters"] = new_chapters
