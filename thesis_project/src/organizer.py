@@ -66,6 +66,35 @@ def _strip_numbering(title: str) -> str:
     return stripped or title.strip()
 
 
+_REF_TITLE = re.compile(r"^(参\s*考\s*文\s*献|references?)\s*$", re.IGNORECASE)
+_DROP_TITLE = re.compile(r"^(摘\s*要|abstract|目\s*录|致\s*谢|谢\s*辞|附\s*录)",
+                         re.IGNORECASE)
+
+
+def _split_special_chapters(chapters):
+    """参考文献章 -> 抽成条目列表；摘要/目录/致谢/附录章 -> 移出正文。
+
+    摘要正文已由 _extract_meta 抽取，这里剔除只是防止正文重复成章。
+    """
+    body, references = [], []
+    for ch in chapters:
+        t = ch["title"].strip()
+        if _REF_TITLE.match(t):
+            paras = list(ch["paras"])
+            for sub in ch.get("subs", []):
+                paras.extend(sub["paras"])
+            for para in paras:
+                for line in para.splitlines():
+                    line = re.sub(r"^\[?\d+\]?[\.、]?\s*", "", line.strip())
+                    if line:
+                        references.append(line)
+        elif _DROP_TITLE.match(t):
+            continue
+        else:
+            body.append(ch)
+    return body, references
+
+
 # ---------------------------------------------------------------------------
 #  抽取标题 / 作者 / 摘要 / 关键词
 # ---------------------------------------------------------------------------
@@ -202,6 +231,7 @@ def _classify(title):
 def organize(docs):
     meta = _extract_meta(docs)
     chapters, auto_skeleton = _build_chapters(docs)
+    chapters, references = _split_special_chapters(chapters)
 
     thesis = {
         "title": meta["title"],
@@ -212,7 +242,7 @@ def organize(docs):
         "keywords_en": [PLACEHOLDER],
         "chapters": chapters,
         "auto_skeleton": auto_skeleton,
-        "references": [
+        "references": references or [
             "示例. GB/T 7714 著录格式. 出版地: 出版者, 年份.  <请替换为真实文献>",
         ],
     }
