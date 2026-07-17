@@ -38,12 +38,27 @@ def _clean(s: str) -> str:
     return re.sub(r"[ \t]+", " ", (s or "")).strip()
 
 
+def _read_text(path: str) -> str:
+    """读文本文件：utf-8(-sig) -> gb18030 依次严格尝试，最后 utf-8 宽容兜底。
+
+    UTF-8 文本几乎不可能被 gb18030 抢先命中（utf-8 先试且严格），
+    而 GBK/GB18030 文本解码 utf-8 必然报错落到第二档。
+    """
+    with open(path, "rb") as f:
+        raw = f.read()
+    for enc in ("utf-8-sig", "gb18030"):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
 # ---------------------------------------------------------------------------
 #  TXT
 # ---------------------------------------------------------------------------
 def read_txt(path: str) -> dict:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        raw = f.read()
+    raw = _read_text(path)
     blocks = []
     for para in re.split(r"\n\s*\n", raw):
         para = para.strip()
@@ -56,8 +71,7 @@ def read_txt(path: str) -> dict:
 #  Markdown
 # ---------------------------------------------------------------------------
 def read_md(path: str) -> dict:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        raw = f.read()
+    raw = _read_text(path)
 
     meta = {}
     # YAML frontmatter
