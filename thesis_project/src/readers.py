@@ -1,0 +1,284 @@
+# -*- coding: utf-8 -*-
+"""
+多格式读取器 —— 读取 docx / pdf / txt / md / json，
+输出统一的中间结构 Document：
+
+    Document = {
+        "source": "路径",
+        "type": "docx|pdf|txt|md|json",
+        "blocks": [ Block, ... ],   # 顺序保留
+        "meta": {...}               # 可选：从 json/frontmatter 提取的标题、作者等
+    }
+
+    Block = {
+        "kind": "heading|paragraph|list_item|table|code",
+        "level": int,        # heading 级别，非标题为 0
+        "text": "纯文本",
+        "rows": [[...]],     # 仅 table
+    }
+
+设计原则：
+  - 任何一种格式失败不影响其它格式；缺库时给出清晰提示。
+  - 尽量从原文档识别标题层级（docx 的 Heading 样式 / md 的 #）。
+"""
+from __future__ import annotations
+import json
+import os
+import re
+
+
+# ---------------------------------------------------------------------------
+#  工具
+# ---------------------------------------------------------------------------
+def _block(kind, text="", level=0, rows=None):
+    return {"kind": kind, "level": level, "text": text.strip(), "rows": rows}
+
+
+def _clean(s: str) -> str:
+    return re.sub(r"[ \t]+", " ", (s or "")).strip()
+
+
+# ---------------------------------------------------------------------------
+#  TXT
+# ---------------------------------------------------------------------------
+def read_txt(path: str) -> dict:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        raw = f.read()
+    blocks = []
+    for para in re.split(r"\n\s*\n", raw):
+        para = para.strip()
+        if para:
+            blocks.append(_block("paragraph", para))
+    return {"source": path, "type": "txt", "blocks": blocks, "meta": {}}
+
+
+# ---------------------------------------------------------------------------
+#  Markdown
+# ---------------------------------------------------------------------------
+def read_md(path: str) -> dict:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        raw = f.read()
+
+    meta = {}
+    # YAML frontmatter
+    m = re.match(r"^---\s*\n(.*?)\n---\s*\n", raw, re.DOTALL)
+    if m:
+        for line in m.group(1).splitlines():
+            if ":" in line:
+                k, v = line.split(":", 1)
+                meta[k.strip()] = v.strip().strip("\"'")
+        raw = raw[m.end():]
+
+    blocks = []
+    lines = raw.splitlines()
+    i = 0
+    para_buf = []
+
+    def flush_para():
+        if para_buf:
+            blocks.append(_block("paragraph", " ".join(para_buf)))
+            para_buf.clear()
+
+    while i < len(lines):
+        line = lines[i]
+        # ATX 标题
+        h = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if h:
+            flush_para()
+            blocks.append(_block("heading", h.group(2), level=len(h.group(1))))
+            i += 1
+            continue
+        # 列表项
+        li = re.match(r"^\s*(?:[-*+]|\d+\.)\s+(.*)$", line)
+        if li:
+            flush_para()
+            blocks.append(_block("list_item", li.group(1)))
+            i += 1
+            continue
+        # 代码块
+        if line.strip().startswith("```"):
+            flush_para()
+            buf = []
+            i += 1
+            while i < len(lines) and not lines[i].strip().startswith("```"):
+                buf.append(lines[i])
+                i += 1
+            blocks.append(_block("code", "\n".join(buf)))
+            i += 1
+            continue
+        # 空行 -> 段落边界
+        if not line.strip():
+            flush_para()
+            i += 1
+            continue
+        para_buf.append(line.strip())
+        i += 1
+    flush_para()
+    return {"source": path, "type": "md", "blocks": blocks, "meta": meta}
+
+
+# ---------------------------------------------------------------------------
+#  JSON —— 支持两类：结构化大纲 或 任意数据
+# ---------------------------------------------------------------------------
+def read_json(path: str) -> dict:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        data = json.load(f)
+
+    blocks = []
+    meta = {}
+
+    def walk(obj, level=1):
+        if isinstance(obj, dict):
+            # 约定字段：title/heading + content/text + children/sections
+            title = obj.get("title") or obj.get("heading")
+            if title:
+                blocks.append(_block("heading", str(title), level=min(level, 3)))
+            body = obj.get("content") or obj.get("text") or obj.get("body")
+            if body:
+                if isinstance(body, list):
+                    for it in body:
+                        blocks.append(_block("paragraph", str(it)))
+                else:
+                    blocks.append(_block("paragraph", str(body)))
+            for kids_key in ("children", "sections", "subsections", "items"):
+                if isinstance(obj.get(kids_key), list):
+                    for kid in obj[kids_key]:
+                        walk(kid, level + 1)
+            # 其它标量字段收进 meta（仅顶层）
+            if level == 1:
+                for k, v in obj.items():
+                    if k in ("title", "heading", "content", "text", "body",
+                             "children", "sections", "subsections", "items"):
+                        continue
+                    if isinstance(v, (str, int, float)):
+                        meta[k] = v
+        elif isinstance(obj, list):
+            for it in obj:
+                walk(it, level)
+        else:
+            blocks.append(_block("paragraph", str(obj)))
+
+    walk(data, 1)
+    return {"source": path, "type": "json", "blocks": blocks, "meta": meta}
+
+
+# ---------------------------------------------------------------------------
+#  DOCX
+# ---------------------------------------------------------------------------
+def read_docx(path: str) -> dict:
+    try:
+        import docx  # python-docx
+    except ImportError:
+        raise RuntimeError("需要 python-docx：pip install python-docx")
+
+    doc = docx.Document(path)
+    blocks = []
+    for p in doc.paragraphs:
+        text = _clean(p.text)
+        if not text:
+            continue
+        style = (p.style.name or "").lower()
+        m = re.search(r"heading\s*(\d)", style)
+        if m:
+            blocks.append(_block("heading", text, level=int(m.group(1))))
+        elif style.startswith("list") or style.startswith("bullet"):
+            blocks.append(_block("list_item", text))
+        else:
+            blocks.append(_block("paragraph", text))
+
+    for t in doc.tables:
+        rows = []
+        for row in t.rows:
+            rows.append([_clean(c.text) for c in row.cells])
+        if rows:
+            blocks.append(_block("table", "", rows=rows))
+
+    meta = {}
+    cp = doc.core_properties
+    if cp.title:
+        meta["title"] = cp.title
+    if cp.author:
+        meta["author"] = cp.author
+    return {"source": path, "type": "docx", "blocks": blocks, "meta": meta}
+
+
+# ---------------------------------------------------------------------------
+#  PDF
+# ---------------------------------------------------------------------------
+def read_pdf(path: str) -> dict:
+    blocks = []
+    meta = {}
+    try:
+        import pdfplumber
+    except ImportError:
+        pdfplumber = None
+
+    if pdfplumber is not None:
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                # 表格
+                for tbl in page.extract_tables() or []:
+                    rows = [[(_clean(c) if c else "") for c in row] for row in tbl]
+                    if rows:
+                        blocks.append(_block("table", "", rows=rows))
+                # 正文
+                txt = page.extract_text() or ""
+                for para in re.split(r"\n\s*\n", txt):
+                    para = _clean(para.replace("\n", " "))
+                    if para:
+                        blocks.append(_block("paragraph", para))
+    else:
+        # 退化到 pypdf
+        try:
+            from pypdf import PdfReader
+        except ImportError:
+            raise RuntimeError("需要 pdfplumber 或 pypdf：pip install pdfplumber")
+        reader = PdfReader(path)
+        for page in reader.pages:
+            txt = page.extract_text() or ""
+            for para in re.split(r"\n\s*\n", txt):
+                para = _clean(para.replace("\n", " "))
+                if para:
+                    blocks.append(_block("paragraph", para))
+
+    return {"source": path, "type": "pdf", "blocks": blocks, "meta": meta}
+
+
+# ---------------------------------------------------------------------------
+#  分发
+# ---------------------------------------------------------------------------
+_READERS = {
+    ".txt": read_txt,
+    ".text": read_txt,
+    ".md": read_md,
+    ".markdown": read_md,
+    ".json": read_json,
+    ".docx": read_docx,
+    ".pdf": read_pdf,
+}
+
+
+def read_file(path: str) -> dict:
+    """按扩展名读取单个文件，返回统一 Document。"""
+    ext = os.path.splitext(path)[1].lower()
+    reader = _READERS.get(ext)
+    if reader is None:
+        raise ValueError(f"不支持的文件类型：{ext}（{path}）")
+    return reader(path)
+
+
+def read_dir(dir_path: str) -> list:
+    """读取目录下所有支持的文件，返回 Document 列表（跳过失败项并打印告警）。"""
+    docs = []
+    for name in sorted(os.listdir(dir_path)):
+        full = os.path.join(dir_path, name)
+        if not os.path.isfile(full):
+            continue
+        if os.path.splitext(name)[1].lower() not in _READERS:
+            continue
+        try:
+            docs.append(read_file(full))
+            print(f"  [读取] {name}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [跳过] {name}: {e}")
+    return docs
