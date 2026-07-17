@@ -132,3 +132,46 @@ def classify_chapters(titles) -> dict:
     if not isinstance(data, dict):
         raise ValueError("分类结果不是 JSON 对象")
     return {str(t): b for t, b in data.items() if b in _VALID_BUCKETS}
+
+
+# ---------------------------------------------------------------------------
+#  PPT 要点提炼 + deck 重建
+# ---------------------------------------------------------------------------
+_BULLET_SYS = ("你是答辩PPT助手。把给定原文提炼成要点列表：最多6条、每条不超过40字、"
+               "用名词短语或短句。只依据原文归纳，不得引入原文没有的内容。")
+
+
+def _llm_bullets(paras) -> list:
+    from src.organizer import PLACEHOLDER
+    src = "\n".join(p for p in paras if p and p != PLACEHOLDER)[:2000]
+    if not src.strip():
+        return ["<待补充要点>"]
+    data = _chat_json(_BULLET_SYS,
+                      '请以 JSON 输出 {"bullets": ["...", "..."]}：\n\n' + src)
+    bullets = [str(b).strip()[:40] for b in data.get("bullets", [])
+               if str(b).strip()]
+    return bullets[:6] or ["<待补充要点>"]
+
+
+def _safe_bullets(paras) -> list:
+    """LLM 提炼失败时回退规则截取。"""
+    from src.organizer import _to_bullets
+    try:
+        return _llm_bullets(paras)
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] 要点提炼失败，改用规则截取：{e}")
+        return _to_bullets(paras)
+
+
+def rebuild_deck(thesis: dict) -> dict:
+    """用 LLM 分类 + LLM 要点重建 PPT 大纲；分类失败整体回退规则分类。"""
+    from src.organizer import _build_deck, _classify
+    try:
+        mapping = classify_chapters([c["title"] for c in thesis["chapters"]])
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] 章节分类失败，改用关键词规则：{e}")
+        mapping = {}
+    meta = {"title": thesis["title"], "author": thesis["author"]}
+    return _build_deck(meta, thesis["chapters"],
+                       classify_fn=lambda t: mapping.get(t) or _classify(t),
+                       bullets_fn=_safe_bullets)
