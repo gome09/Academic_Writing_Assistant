@@ -52,6 +52,20 @@ def _looks_generic(title: str) -> bool:
     return bool(_GENERIC_HEADING.match(title.strip()))
 
 
+# 标题自带的编号前缀（生成时会统一重新编号，避免"第一章 第一章 绪论"）
+_NUM_PREFIX = re.compile(
+    r"^(第\s*[一二三四五六七八九十百\d]+\s*[章节]\s*[、.．:：]?"
+    r"|[一二三四五六七八九十]+\s*[、.．]"
+    r"|\d+(\.\d+)*\s*[、.．]?\s+"
+    r"|\d+(\.\d+)+\s*)"
+)
+
+
+def _strip_numbering(title: str) -> str:
+    stripped = _NUM_PREFIX.sub("", title).strip()
+    return stripped or title.strip()
+
+
 # ---------------------------------------------------------------------------
 #  抽取标题 / 作者 / 摘要 / 关键词
 # ---------------------------------------------------------------------------
@@ -110,14 +124,16 @@ def _build_chapters(docs):
         current_sub = None
         for b in blocks:
             if b["kind"] == "heading" and b["level"] <= 1:
-                current_ch = {"title": b["text"], "level": 1, "paras": [], "subs": []}
+                current_ch = {"title": _strip_numbering(b["text"]), "level": 1,
+                              "paras": [], "subs": []}
                 chapters.append(current_ch)
                 current_sub = None
             elif b["kind"] == "heading" and b["level"] == 2:
                 if current_ch is None:
                     current_ch = {"title": PLACEHOLDER, "level": 1, "paras": [], "subs": []}
                     chapters.append(current_ch)
-                current_sub = {"title": b["text"], "level": 2, "paras": []}
+                current_sub = {"title": _strip_numbering(b["text"]), "level": 2,
+                               "paras": []}
                 current_ch["subs"].append(current_sub)
             elif b["kind"] in ("heading",):  # level>=3 归入当前段落文本
                 target = current_sub or current_ch
