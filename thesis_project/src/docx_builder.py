@@ -250,6 +250,14 @@ def build(thesis, out_path):
                           W["headings"][2]["size_pt"], True)
             for para in sub["paras"]:
                 _add_para(doc, para, W["body"], indent_chars=2)
+            for ti, sub3 in enumerate(sub.get("subs", []), 1):
+                h3 = doc.add_heading(level=3)
+                run = h3.add_run(f"{ci}.{si}.{ti}　{sub3['title']}")
+                _set_run_font(run, W["headings"][3]["font_cn"],
+                              W["headings"][3]["font_en"],
+                              W["headings"][3]["size_pt"], True)
+                for para in sub3["paras"]:
+                    _add_para(doc, para, W["body"], indent_chars=2)
 
     # ---------- 参考文献 ----------
     _add_page_break(doc)

@@ -151,31 +151,44 @@ def _build_chapters(docs):
     if has_heading:
         current_ch = None
         current_sub = None
+        current_sub3 = None
         for b in blocks:
             if b["kind"] == "heading" and b["level"] <= 1:
                 current_ch = {"title": _strip_numbering(b["text"]), "level": 1,
                               "paras": [], "subs": []}
                 chapters.append(current_ch)
                 current_sub = None
+                current_sub3 = None
             elif b["kind"] == "heading" and b["level"] == 2:
                 if current_ch is None:
                     current_ch = {"title": PLACEHOLDER, "level": 1, "paras": [], "subs": []}
                     chapters.append(current_ch)
                 current_sub = {"title": _strip_numbering(b["text"]), "level": 2,
-                               "paras": []}
+                               "paras": [], "subs": []}
                 current_ch["subs"].append(current_sub)
-            elif b["kind"] in ("heading",):  # level>=3 归入当前段落文本
-                target = current_sub or current_ch
-                if target is not None:
-                    target["paras"].append(b["text"])
+                current_sub3 = None
+            elif b["kind"] == "heading":  # level >= 3
+                if current_sub is None:
+                    # 无上级小节：提升为二级
+                    if current_ch is None:
+                        current_ch = {"title": PLACEHOLDER, "level": 1,
+                                      "paras": [], "subs": []}
+                        chapters.append(current_ch)
+                    current_sub = {"title": _strip_numbering(b["text"]),
+                                   "level": 2, "paras": [], "subs": []}
+                    current_ch["subs"].append(current_sub)
+                    current_sub3 = None
+                else:
+                    current_sub3 = {"title": _strip_numbering(b["text"]),
+                                    "level": 3, "paras": []}
+                    current_sub["subs"].append(current_sub3)
             else:  # 正文/列表/代码/表格文本
                 text = b["text"] if b["kind"] != "table" else _table_to_text(b)
                 if not text:
                     continue
-                if current_sub is not None:
-                    current_sub["paras"].append(text)
-                elif current_ch is not None:
-                    current_ch["paras"].append(text)
+                target = current_sub3 or current_sub or current_ch
+                if target is not None:
+                    target["paras"].append(text)
                 else:
                     # 出现在任何标题之前的段落 -> 前言缓冲
                     if not chapters or chapters[0]["title"] != "前言":
@@ -259,6 +272,8 @@ def _build_deck(meta, chapters):
         paras = list(ch["paras"])
         for sub in ch.get("subs", []):
             paras.extend(sub["paras"])
+            for sub3 in sub.get("subs", []):
+                paras.extend(sub3["paras"])
         buckets[key].append({"title": ch["title"], "bullets": _to_bullets(paras)})
 
     slides = []
