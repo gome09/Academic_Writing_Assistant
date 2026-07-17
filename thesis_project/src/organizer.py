@@ -278,17 +278,23 @@ def organize(docs):
     return thesis, deck
 
 
-def _build_deck(meta, chapters):
-    """把章节映射到 PPT 7 段结构。"""
+def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
+    """把章节映射到 PPT 7 段结构。
+
+    classify_fn(title)->bucket、bullets_fn(paras)->list[str] 为可选注入点，
+    默认用规则实现（_classify / _to_bullets），供 LLM 增强层替换。
+    """
+    classify = classify_fn or _classify
+    to_bullets = bullets_fn or _to_bullets
     buckets = {"background": [], "method": [], "result": [], "conclusion": []}
     for ch in chapters:
-        key = _classify(ch["title"])
+        key = classify(ch["title"])
         paras = list(ch["paras"])
         for sub in ch.get("subs", []):
             paras.extend(sub["paras"])
             for sub3 in sub.get("subs", []):
                 paras.extend(sub3["paras"])
-        buckets[key].append({"title": ch["title"], "bullets": _to_bullets(paras)})
+        buckets[key].append({"title": ch["title"], "bullets": to_bullets(paras)})
 
     slides = []
     slides.append({"type": "cover", "title": meta["title"],

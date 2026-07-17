@@ -113,3 +113,22 @@ def translate_abstract(thesis: dict) -> None:
         thesis["keywords_en"] = [str(x).strip()
                                  for x in data["keywords_en"]
                                  if str(x).strip()][:5]
+
+
+# ---------------------------------------------------------------------------
+#  章节 -> PPT 分区 语义分类
+# ---------------------------------------------------------------------------
+_CLS_SYS = ("你是答辩PPT助手。把论文章节标题分类到四个部分之一："
+            "background（背景/绪论/综述）、method（方法/设计/理论/需求）、"
+            "result（实现/实验/测试/结果）、conclusion（总结/结论/展望）。")
+
+
+def classify_chapters(titles) -> dict:
+    """返回 {标题: bucket}，只保留合法 bucket；缺失的标题由调用方回退规则分类。"""
+    data = _chat_json(
+        _CLS_SYS,
+        '请以 JSON 输出 {"章节标题": "background|method|result|conclusion", ...}：\n'
+        + json.dumps(list(titles), ensure_ascii=False))
+    if not isinstance(data, dict):
+        raise ValueError("分类结果不是 JSON 对象")
+    return {str(t): b for t, b in data.items() if b in _VALID_BUCKETS}
