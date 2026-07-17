@@ -219,6 +219,58 @@ def read_docx(path: str) -> dict:
 # ---------------------------------------------------------------------------
 #  PDF
 # ---------------------------------------------------------------------------
+def _join_lines(lines):
+    """合并断行：ASCII 单词之间补空格，中文直接相连。"""
+    out = ""
+    for ln in lines:
+        if (out and out[-1].isascii() and out[-1].isalnum()
+                and ln[:1].isascii() and ln[:1].isalnum()):
+            out += " "
+        out += ln
+    return out
+
+
+def _pdf_heading_level(prefix: str) -> int:
+    if "章" in prefix:
+        return 1
+    m = re.match(r"\d+(\.\d+)*", prefix)
+    return min(m.group(0).count(".") + 1, 3) if m else 1
+
+
+_PDF_HEADING = re.compile(r"^(第\s*[一二三四五六七八九十百\d]+\s*章|\d+(\.\d+)*[\s、.．])")
+
+
+def _pdf_lines_to_blocks(txt: str, blocks: list) -> None:
+    """PDF 文本按行重组：行尾终止标点断段；短编号行识别为标题。
+
+    PDF 提取的文本几乎没有连续空行，不能按空行分段；
+    这里以「句末标点在行尾」为段落边界，是对中文论文的合理近似。
+    """
+    buf = []
+
+    def flush():
+        if buf:
+            blocks.append(_block("paragraph", _join_lines(buf)))
+            buf.clear()
+
+    for line in txt.splitlines():
+        line = _clean(line)
+        if not line:
+            flush()
+            continue
+        m = _PDF_HEADING.match(line)
+        if (m and len(line) <= 25
+                and not re.search(r"[。！？；，,;:.]\s*$", line)):
+            flush()
+            blocks.append(_block("heading", line,
+                                 level=_pdf_heading_level(m.group(1))))
+            continue
+        buf.append(line)
+        if re.search(r"[。！？!?]$", line):
+            flush()
+    flush()
+
+
 def read_pdf(path: str) -> dict:
     blocks = []
     meta = {}
@@ -230,17 +282,27 @@ def read_pdf(path: str) -> dict:
     if pdfplumber is not None:
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages:
-                # 表格
-                for tbl in page.extract_tables() or []:
-                    rows = [[(_clean(c) if c else "") for c in row] for row in tbl]
+                # 表格（find_tables 以便拿到 bbox 用于正文去重）
+                tables = page.find_tables()
+                bboxes = []
+                for tbl in tables:
+                    rows = [[(_clean(c) if c else "") for c in row]
+                            for row in (tbl.extract() or [])]
+                    rows = [r for r in rows if any(r)]
                     if rows:
                         blocks.append(_block("table", "", rows=rows))
-                # 正文
-                txt = page.extract_text() or ""
-                for para in re.split(r"\n\s*\n", txt):
-                    para = _clean(para.replace("\n", " "))
-                    if para:
-                        blocks.append(_block("paragraph", para))
+                        bboxes.append(tbl.bbox)
+
+                # 正文：过滤掉落在表格 bbox 内的字符，避免内容重复
+                def _outside(obj, _bx=tuple(bboxes)):
+                    cx = (obj["x0"] + obj["x1"]) / 2
+                    cy = (obj["top"] + obj["bottom"]) / 2
+                    return not any(x0 <= cx <= x1 and y0 <= cy <= y1
+                                   for (x0, y0, x1, y1) in _bx)
+
+                target = page.filter(_outside) if bboxes else page
+                txt = target.extract_text() or ""
+                _pdf_lines_to_blocks(txt, blocks)
     else:
         # 退化到 pypdf
         try:
@@ -250,10 +312,7 @@ def read_pdf(path: str) -> dict:
         reader = PdfReader(path)
         for page in reader.pages:
             txt = page.extract_text() or ""
-            for para in re.split(r"\n\s*\n", txt):
-                para = _clean(para.replace("\n", " "))
-                if para:
-                    blocks.append(_block("paragraph", para))
+            _pdf_lines_to_blocks(txt, blocks)
 
     return {"source": path, "type": "pdf", "blocks": blocks, "meta": meta}
 
