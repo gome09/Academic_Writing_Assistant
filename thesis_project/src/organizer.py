@@ -209,8 +209,14 @@ def _build_chapters(docs):
 
 
 def _table_to_text(block):
+    """表格 -> 多行文本：每行一条、竖线分隔、跳过空单元格与空行。"""
     rows = block.get("rows") or []
-    return " | ".join(" ".join(r) for r in rows[:2])
+    lines = []
+    for r in rows:
+        cells = [c.strip() for c in r if c and c.strip()]
+        if cells:
+            lines.append(" | ".join(cells))
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
