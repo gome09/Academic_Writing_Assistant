@@ -78,6 +78,7 @@ WORD_SPEC = {
         "keywords_label_cn": "关键词：",
         "keywords_label_en": "Key words: ",
         "keywords_sep": "；",
+        "first_line_indent_chars": 0,
         "keywords_min": 3,
         "keywords_max": 5,
     },
