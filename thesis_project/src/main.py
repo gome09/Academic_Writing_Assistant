@@ -33,20 +33,32 @@ DEFAULT_OUTPUT = os.path.join(ROOT, "output")
 
 
 def gather_docs(inputs):
+    """读取所有输入，返回 (docs, errors)。
+
+    errors 是 [(path, reason), ...]，调用方在 main() 末尾聚合打印。
+    """
     docs = []
+    errors = []
     for item in inputs:
         if os.path.isdir(item):
             print(f"[目录] {item}")
-            docs.extend(read_dir(item))
+            for d in read_dir(item):
+                docs.append(d)
         elif os.path.isfile(item):
             try:
                 docs.append(read_file(item))
                 print(f"  [读取] {os.path.basename(item)}")
             except Exception as e:  # noqa: BLE001
+                errors.append((item, str(e)))
                 print(f"  [跳过] {item}: {e}")
         else:
+            errors.append((item, '不存在'))
             print(f"  [忽略] 不存在：{item}")
-    return docs
+    if errors:
+        print(f"  [跳过 {len(errors)} 个文件]")
+        for p_, reason in errors:
+            print(f"    - {p_}: {reason}")
+    return docs, errors
 
 
 def main():
@@ -64,7 +76,7 @@ def main():
 
     print("=" * 56)
     print("① 读取源文件")
-    docs = gather_docs(args.input)
+    docs, errors = gather_docs(args.input)
     if not docs:
         print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/md/json 放进 input/ 后重试。")
         print("  （可先用示例：--input sample_input）")
