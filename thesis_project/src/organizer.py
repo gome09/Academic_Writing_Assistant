@@ -13,6 +13,7 @@
   - PPT 大纲从章节树映射到规范里的 7 段结构，正文要点自动提炼。
 """
 from __future__ import annotations
+import ast
 import re
 
 from config.format_spec import PPT_SPEC
@@ -66,8 +67,14 @@ _NUM_PREFIX = re.compile(
 
 
 def _strip_numbering(title: str) -> str:
-    stripped = _NUM_PREFIX.sub("", title).strip()
-    return stripped or title.strip()
+    """剥除自带编号前缀；纯空白标题退化为 PLACEHOLDER。"""
+    stripped = _NUM_PREFIX.sub("", title or "").strip()
+    if stripped:
+        return stripped
+    if not (title or "").strip():
+        return PLACEHOLDER
+    return title.strip()
+
 
 
 _REF_TITLE = re.compile(r"^(参\s*考\s*文\s*献|references?)\s*$", re.IGNORECASE)
@@ -113,7 +120,18 @@ def _extract_meta(docs):
         author = author or m.get("author")
         if m.get("keywords"):
             kw = m["keywords"]
-            keywords = kw if isinstance(kw, list) else re.split(r"[,，;；]\s*", str(kw))
+            if isinstance(kw, str):
+                s = kw.strip()
+                if s.startswith("[") and s.endswith("]"):
+                    try:
+                        parsed = ast.literal_eval(s)
+                        kw = parsed if isinstance(parsed, list) else s.split(",")
+                    except (ValueError, SyntaxError):
+                        kw = [s]
+                else:
+                    parts = re.split(r"[,;，;； \s]+", s)
+                    kw = [x for x in parts if x]
+            keywords = list(kw)
 
     # 从正文块启发式识别
     all_blocks = [b for d in docs for b in d["blocks"]]
@@ -123,9 +141,9 @@ def _extract_meta(docs):
                 and t and not _looks_generic(t)):
             title = t
         # 摘要
-        if abstract is None and re.match(r"^(摘\s*要|abstract)", t, re.I):
+        if abstract is None and re.match(r"^(摘，?要|abstract)", t, re.I):
             # 摘要正文：同块去掉标签，或取下一段
-            body = re.sub(r"^(摘\s*要|abstract)[：:\s]*", "", t, flags=re.I).strip()
+            body = re.sub(r"^(摘，?要|abstract)[：: \\s]*", "", t, flags=re.I).strip()
             if len(body) < 10 and i + 1 < len(all_blocks):
                 body = all_blocks[i + 1]["text"]
             abstract = body
@@ -133,7 +151,7 @@ def _extract_meta(docs):
         if not keywords:
             mkw = re.match(r"^(关键词|关键字|key\s*words)[：:\s]*(.+)$", t, re.I)
             if mkw:
-                keywords = [k for k in re.split(r"[,，;；\s]+", mkw.group(2)) if k]
+                keywords = [k for k in re.split(r"[,;，;； \s]+", mkw.group(2)) if k]
 
     return {
         "title": title or PLACEHOLDER,
