@@ -201,5 +201,12 @@ def build(deck, out_path):
         if s["type"] in ("outline", "content"):
             _footer(slide, idx, total, deck["title"])
 
+        n = len(slides)
+    p_min = P["principle"]["total_slides_min"]
+    p_max = P["principle"]["total_slides_max"]
+    if n < p_min:
+        print(f"  [警告] PPT 总页数 {n} 低于规范下限 {p_min}，请检查。")
+    elif n > p_max:
+        print(f"  [警告] PPT 总页数 {n} 高于规范上限 {p_max}，请检查。")
     prs.save(out_path)
     return out_path
