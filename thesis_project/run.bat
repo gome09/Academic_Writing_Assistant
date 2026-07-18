@@ -24,13 +24,13 @@ echo [信息] 使用解释器: %PY%
 echo.
 
 REM ---- 检查并按需安装依赖 ----
-%PY% -c "import docx, pptx, pdfplumber" >nul 2>nul
+%PY% -c "import docx, pptx, pdfplumber, openai" >nul 2>nul
 if errorlevel 1 (
-    echo [信息] 缺少依赖，正在安装 python-docx / python-pptx / pdfplumber ...
-    %PY% -m pip install python-docx python-pptx pdfplumber
+    echo [信息] 缺少依赖，正在安装 python-docx / python-pptx / pdfplumber / openai ...
+    %PY% -m pip install python-docx python-pptx pdfplumber openai
     if errorlevel 1 (
         echo [错误] 依赖安装失败，请检查网络或手动执行:
-        echo         %PY% -m pip install python-docx python-pptx pdfplumber
+        echo         %PY% -m pip install python-docx python-pptx pdfplumber openai
         pause
         exit /b 1
     )
@@ -49,6 +49,7 @@ if errorlevel 1 (
 echo.
 
 REM ---- 运行主程序 ----
+REM ---- 透传额外参数：编辑本文件在本行后加 --llm 等开关 ----
 %PY% -u src\main.py --input "%INPUT%" --output output
 set "RC=%errorlevel%"
 echo.
