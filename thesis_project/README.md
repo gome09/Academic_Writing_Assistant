@@ -6,6 +6,9 @@
 
 > 定位：**草案**。产物已套好格式与结构骨架，正文与 `<请填写>` 占位符需人工润色。
 
+> 实施进度：[`docs/superpowers/plans/2026-07-17-organizer-fixes-and-llm-enhancer.md`](../docs/superpowers/plans/2026-07-17-organizer-fixes-and-llm-enhancer.md)
+
+
 ---
 
 ## 目录结构
@@ -94,6 +97,9 @@ PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档�
 
 原则：LLM 只做整理/提炼/翻译/分类，不扩写正文；AI 生成的内容带
 `<AI生成，请核对>` 标记；任一步失败自动回退纯规则结果，主流程不受影响。
+
+> ☆ **如何定位 AI 生成内容**：检索 `<AI生成，请核对>` 即可一次性找到题目、摘要、英文摘要、英文关键词等全部 LLM 输出位置。
+
 
 ```powershell
 # PowerShell 示例（DeepSeek）
