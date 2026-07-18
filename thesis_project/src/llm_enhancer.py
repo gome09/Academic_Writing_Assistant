@@ -18,6 +18,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -124,14 +125,33 @@ _CLS_SYS = ("你是答辩PPT助手。把论文章节标题分类到四个部分�
 
 
 def classify_chapters(titles) -> dict:
-    """返回 {标题: bucket}，只保留合法 bucket；缺失的标题由调用方回退规则分类。"""
-    data = _chat_json(
+    """返回 {标题: bucket}，仅保留合法 bucket；标题字典与查询都做归一化。
+
+    归一化规则：NFKC + 去前后空白 + 去全/半角空格。
+    "未命中的标题由调用方退化为规则分类。
+    """
+    raw = _chat_json(
         _CLS_SYS,
-        '请以 JSON 输出 {"章节标题": "background|method|result|conclusion", ...}：\n'
+        'Please output JSON {"章节标题": "background|method|result|conclusion", ...}:' + chr(10)
         + json.dumps(list(titles), ensure_ascii=False))
-    if not isinstance(data, dict):
+    if not isinstance(raw, dict):
         raise ValueError("分类结果不是 JSON 对象")
-    return {str(t): b for t, b in data.items() if b in _VALID_BUCKETS}
+    out = {}
+    for t, b in raw.items():
+        if b not in _VALID_BUCKETS:
+            continue
+        key = _norm_title(t)
+        out[key] = b
+    return out
+
+
+def _norm_title(s) -> str:
+    """NFKC + 去空白 + 去全角空格，用于查表键归一化。"""
+    if not isinstance(s, str):
+        return str(s)
+    s = unicodedata.normalize("NFKC", s).strip()
+    return s.replace(" ", "").replace(chr(0x3000), "")
+
 
 
 # ---------------------------------------------------------------------------
