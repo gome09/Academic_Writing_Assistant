@@ -39,10 +39,16 @@ def _clean(s: str) -> str:
 
 
 def _read_text(path: str) -> str:
-    """读文本文件：utf-8(-sig) -> gb18030 依次严格尝试，最后 utf-8 宽容兜底。
+    """读取文本文件。
 
-    UTF-8 文本几乎不可能被 gb18030 抢先命中（utf-8 先试且严格），
-    而 GBK/GB18030 文本解码 utf-8 必然报错落到第二档。
+    三步回退顺序固化（不要交换）：
+      1) utf-8-sig
+      2) gb18030
+      3) utf-8 (errors="replace")
+
+    为什么：UTF-8 文本几乎不会被 gb18030 抢先命中（utf-8 先试且
+    严格）；GBK/GB18030 文本解码 utf-8 必报 UnicodeDecodeError 落到第二档。
+    打乱码文件由第三步 errors="replace" 兜底，不会抛异常。
     """
     with open(path, "rb") as f:
         raw = f.read()
