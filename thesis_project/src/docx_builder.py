@@ -151,7 +151,8 @@ def _add_toc(doc):
     run = p.add_run()
     fldBegin = OxmlElement("w:fldChar"); fldBegin.set(qn("w:fldCharType"), "begin")
     instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
-    instr.text = f'TOC \\o "1-{t["levels"]}" \\h \\z \\u'
+    levels = min(max(t["levels"], len(W["headings"])), 3)
+    instr.text = f'TOC \\o "1-{levels}" \\h \\z \\u'
     fldSep = OxmlElement("w:fldChar"); fldSep.set(qn("w:fldCharType"), "separate")
     hint = OxmlElement("w:t"); hint.text = "【在 Word 中按 F9 更新目录】"
     fldEnd = OxmlElement("w:fldChar"); fldEnd.set(qn("w:fldCharType"), "end")
@@ -208,7 +209,7 @@ def build(thesis, out_path):
                "size_pt": ab["title_size_pt"], "bold": ab["title_bold"],
                "line_spacing": 1.5},
               align=ab["title_alignment"], space_before=12, space_after=18)
-    _add_para(doc, thesis["abstract"], W["body"], indent_chars=2)
+    _add_para(doc, thesis["abstract"], W["body"], indent_chars=ab.get("first_line_indent_chars", 0))
     kw = ab["keywords_sep"].join(thesis["keywords"])
     _add_para(doc, ab["keywords_label_cn"] + kw,
               {"font_cn": "黑体", "font_en": "Times New Roman",
@@ -222,7 +223,7 @@ def build(thesis, out_path):
                "size_pt": ab["title_en_size_pt"], "bold": True,
                "line_spacing": 1.5},
               align="center", space_before=12, space_after=18)
-    _add_para(doc, thesis["abstract_en"], W["body"], indent_chars=2)
+    _add_para(doc, thesis["abstract_en"], W["body"], indent_chars=ab.get("first_line_indent_chars", 0))
     _add_para(doc, ab["keywords_label_en"] + "; ".join(thesis["keywords_en"]),
               {"font_cn": "Times New Roman", "font_en": "Times New Roman",
                "size_pt": 12, "bold": True, "line_spacing_pt": 20},
@@ -276,9 +277,14 @@ def build(thesis, out_path):
 
 
 def _cn_num(n):
-    cn = "零一二三四五六七八九十"
-    if n <= 10:
-        return cn[n] if n < 10 else "十"
+    """0..99 转中文数字（含 11/19/20/21/99 边界）。调用方传入的 n 从 1 起。"""
+    cn_digit = "零一二三四五六七八九"
+    if n < 10:
+        return cn_digit[n]
+    if n == 10:
+        return "十"
     if n < 20:
-        return "十" + cn[n - 10]
-    return str(n)
+        return "十" + cn_digit[n - 10]
+    tens, ones = divmod(n, 10)
+    head = cn_digit[tens] + "十"
+    return head + (cn_digit[ones] if ones else "")
