@@ -284,6 +284,17 @@ def _pdf_lines_to_blocks(txt: str, blocks: list) -> None:
     flush()
 
 
+def _ensure_has_text(blocks: list, path: str) -> None:
+    """扫描件（图片型 PDF）提取不到文字时报错，避免静默生成全占位符骨架。"""
+    if any(b.get("text") for b in blocks):
+        return
+    if any(b.get("kind") == "table" for b in blocks):
+        return
+    raise RuntimeError(
+        "未提取到任何文字，可能是扫描件（图片型 PDF）。"
+        "请先用 OCR 工具（如 WPS/Acrobat/umi-ocr）转成可复制文本的 PDF 再试")
+
+
 def read_pdf(path: str) -> dict:
     blocks = []
     meta = {}
@@ -327,6 +338,7 @@ def read_pdf(path: str) -> dict:
             txt = page.extract_text() or ""
             _pdf_lines_to_blocks(txt, blocks)
 
+    _ensure_has_text(blocks, path)
     return {"source": path, "type": "pdf", "blocks": blocks, "meta": meta}
 
 
