@@ -25,6 +25,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 from config.format_spec import WORD_SPEC as W
+from src.organizer import PLACEHOLDER
 
 _ALIGN = {
     "center": WD_ALIGN_PARAGRAPH.CENTER,
@@ -151,7 +152,7 @@ def _add_toc(doc):
     run = p.add_run()
     fldBegin = OxmlElement("w:fldChar"); fldBegin.set(qn("w:fldCharType"), "begin")
     instr = OxmlElement("w:instrText"); instr.set(qn("xml:space"), "preserve")
-    levels = min(max(t["levels"], len(W["headings"])), 3)
+    levels = min(max(t["levels"], 1), 9)   # 直接采用 spec 值，clamp 到 Word 允许的 1..9
     instr.text = f'TOC \\o "1-{levels}" \\h \\z \\u'
     fldSep = OxmlElement("w:fldChar"); fldSep.set(qn("w:fldCharType"), "separate")
     hint = OxmlElement("w:t"); hint.text = "【在 Word 中按 F9 更新目录】"
@@ -161,10 +162,25 @@ def _add_toc(doc):
 
 
 # ---------------------------------------------------------------------------
-#  页码
+#  页码：分节（前置部分罗马数字 / 正文阿拉伯数字从 1 起）
 # ---------------------------------------------------------------------------
-def _add_page_number(doc):
-    footer = doc.sections[0].footer
+_PG_FMT = {"roman": "lowerRoman", "arabic": "decimal"}   # spec 值 -> w:pgNumType/@w:fmt
+
+
+def _set_pg_num_type(section, fmt, start=None):
+    """在 section 的 w:sectPr 下写入 w:pgNumType（页码格式 / 起始页码）。"""
+    sectPr = section._sectPr
+    pgNumType = sectPr.find(qn("w:pgNumType"))
+    if pgNumType is None:
+        pgNumType = OxmlElement("w:pgNumType")
+        sectPr.append(pgNumType)
+    pgNumType.set(qn("w:fmt"), fmt)
+    if start is not None:
+        pgNumType.set(qn("w:start"), str(start))
+
+
+def _write_footer_page_field(footer):
+    """向页脚写入居中 PAGE 域。"""
     p = footer.paragraphs[0]
     p.alignment = _ALIGN[W["page_number"]["alignment"]]
     run = p.add_run()
@@ -176,6 +192,18 @@ def _add_page_number(doc):
         run._element.append(el)
 
 
+def _setup_page_numbers(doc):
+    pn = W["page_number"]
+    front, body = doc.sections[0], doc.sections[1]
+    # section 1：前置部分（封面/摘要/目录）罗马数字
+    _set_pg_num_type(front, _PG_FMT[pn["front_matter"]])
+    _write_footer_page_field(front.footer)
+    # section 2：正文与参考文献，阿拉伯数字从 1 重新编号；页脚断开与前节链接
+    _set_pg_num_type(body, _PG_FMT[pn["body"]], start=1)
+    body.footer.is_linked_to_previous = False
+    _write_footer_page_field(body.footer)
+
+
 # ---------------------------------------------------------------------------
 #  主构建
 # ---------------------------------------------------------------------------
@@ -185,6 +213,12 @@ def build(thesis, out_path):
     _setup_styles(doc)
 
     ab = W["abstract"]
+
+    # 关键词数量校验（占位符不警告；仅提示，不阻断生成）
+    kws = thesis["keywords"]
+    if kws != [PLACEHOLDER] and not (ab["keywords_min"] <= len(kws) <= ab["keywords_max"]):
+        print(f"  [警告] 关键词数量 {len(kws)} 不在规范 "
+              f"{ab['keywords_min']}-{ab['keywords_max']} 范围，请检查。")
 
     # ---------- 封面 ----------
     _add_para(doc, "", W["body"], space_before=60)
@@ -232,7 +266,9 @@ def build(thesis, out_path):
 
     # ---------- 目录 ----------
     _add_toc(doc)
-    _add_page_break(doc)
+
+    # ---------- 分节：前置部分(section 1) | 正文+参考文献(section 2) ----------
+    doc.add_section(WD_SECTION.NEW_PAGE)
 
     # ---------- 正文章节 ----------
     for ci, ch in enumerate(thesis["chapters"], 1):
@@ -271,7 +307,7 @@ def build(thesis, out_path):
                   {"font_cn": "宋体", "font_en": "Times New Roman",
                    "size_pt": 10.5, "line_spacing_pt": 20})
 
-    _add_page_number(doc)
+    _setup_page_numbers(doc)
     doc.save(out_path)
     return out_path
 

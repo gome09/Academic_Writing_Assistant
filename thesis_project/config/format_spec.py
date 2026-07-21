@@ -86,7 +86,7 @@ WORD_SPEC = {
     # ---- 目录 ----
     "toc": {
         "title": "目  录",
-        "levels": 2,               # 列至二级标题
+        "levels": 3,               # 列至三级标题
         "leader": "dot",           # 圆点前导符
         "page_number_align": "right",
     },
