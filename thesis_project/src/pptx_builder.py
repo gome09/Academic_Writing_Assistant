@@ -201,12 +201,37 @@ def build(deck, out_path):
         if s["type"] in ("outline", "content"):
             _footer(slide, idx, total, deck["title"])
 
-        n = len(slides)
     p_min = P["principle"]["total_slides_min"]
     p_max = P["principle"]["total_slides_max"]
-    if n < p_min:
-        print(f"  [警告] PPT 总页数 {n} 低于规范下限 {p_min}，请检查。")
-    elif n > p_max:
-        print(f"  [警告] PPT 总页数 {n} 高于规范上限 {p_max}，请检查。")
+    if total < p_min:
+        print(f"  [警告] PPT 总页数 {total} 低于规范下限 {p_min}，请检查。")
+    elif total > p_max:
+        print(f"  [警告] PPT 总页数 {total} 高于规范上限 {p_max}，请检查。")
+    _check_structure(slides)
     prs.save(out_path)
     return out_path
+
+
+def _check_structure(slides):
+    """按 PPT_SPEC["structure"] 校验可由 slide["type"] 直接判定的段落页数。
+
+    仅校验 cover / outline / thanks 三项：background / method / result /
+    conclusion 四段在 deck 数据里没有直接标记（分段归属信息在 deck 中不保留，
+    只剩 section/content 类型），故 content 页总数不在此校验。
+    另外 outline 只校验上限：现有合法 deck（见 tests/test_pptx_page_count.py
+    的构造方式）允许省略目录页，缺失目录不作警告。
+    """
+    checkable = {"cover", "outline", "thanks"}
+    skip_min = {"outline"}
+    counts = {}
+    for s in slides:
+        counts[s["type"]] = counts.get(s["type"], 0) + 1
+    for seg in P["structure"]:
+        key = seg["key"]
+        if key not in checkable:
+            continue
+        n = counts.get(key, 0)
+        if n < seg["min"] and key not in skip_min:
+            print(f"  [警告] PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。")
+        elif n > seg["max"]:
+            print(f"  [警告] PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。")
