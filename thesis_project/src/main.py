@@ -61,6 +61,24 @@ def gather_docs(inputs):
     return docs, errors
 
 
+def _build_with_retry(build_fn, data, out_path):
+    """构建并保存；文件被 Word/WPS 占用时自动加序号改名重试，全部失败返回 None。"""
+    candidates = [out_path]
+    root, ext = os.path.splitext(out_path)
+    candidates += [f"{root}({i}){ext}" for i in range(2, 6)]
+    for i, path in enumerate(candidates):
+        try:
+            result = build_fn(data, path)
+            if i > 0:
+                print(f"  [提示] {os.path.basename(out_path)} 正被占用"
+                      f"（可能在 Word/WPS 中打开），已改存：{os.path.basename(path)}")
+            return result
+        except PermissionError:
+            continue
+    print(f"  [错误] 无法写入 {out_path}：文件被占用。请关闭 Word/WPS 后重试。")
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description="论文Word草案 + 答辩PPT草案 生成器")
     ap.add_argument("--input", nargs="+", default=[DEFAULT_INPUT],
@@ -93,18 +111,25 @@ def main():
     print(f"  论文：{len(thesis['chapters'])} 章；PPT：{len(deck['slides'])} 页。")
 
     print("③ 生成草案")
+    ok = True
     if args.only != "ppt":
         wp = os.path.join(args.output, "论文草案.docx")
-        docx_builder.build(thesis, wp)
-        print(f"  ✔ Word: {wp}")
+        wp = _build_with_retry(docx_builder.build, thesis, wp)
+        if wp:
+            print(f"  ✔ Word: {wp}")
+        else:
+            ok = False
     if args.only != "word":
         pp = os.path.join(args.output, "答辩PPT草案.pptx")
-        pptx_builder.build(deck, pp)
-        print(f"  ✔ PPT : {pp}")
+        pp = _build_with_retry(pptx_builder.build, deck, pp)
+        if pp:
+            print(f"  ✔ PPT : {pp}")
+        else:
+            ok = False
 
     print("=" * 56)
     print("完成。请打开草案：Word 中按 F9 更新目录；两份均需人工润色占位符 <请填写>。")
-    return 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
