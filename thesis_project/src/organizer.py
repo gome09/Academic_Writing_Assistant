@@ -78,6 +78,7 @@ def _strip_numbering(title: str) -> str:
 
 
 _REF_TITLE = re.compile(r"^(参\s*考\s*文\s*献|references?)\s*$", re.IGNORECASE)
+_ABSTRACT_LABEL = re.compile(r"^(摘[，\s]*要|abstract\b)[：:\s]*", re.I)
 _DROP_TITLE = re.compile(r"^(摘\s*要|abstract|目\s*录|致\s*谢|谢\s*辞|附\s*录)",
                          re.IGNORECASE)
 
@@ -141,12 +142,20 @@ def _extract_meta(docs):
                 and t and not _looks_generic(t)):
             title = t
         # 摘要
-        if abstract is None and re.match(r"^(摘[，\s]*要|abstract)", t, re.I):
-            # 摘要正文：同块去掉标签，或取下一段
-            body = re.sub(r"^(摘[，\s]*要|abstract)[：:\s]*", "", t, flags=re.I).strip()
-            if len(body) < 10 and i + 1 < len(all_blocks):
-                body = all_blocks[i + 1]["text"]
-            abstract = body
+        if abstract is None and _ABSTRACT_LABEL.match(t):
+            # 摘要正文：同块去掉标签；太短则向后找第一个普通段落
+            body = _ABSTRACT_LABEL.sub("", t).strip()
+            if len(body) < 10:
+                for nb in all_blocks[i + 1:i + 4]:
+                    if nb["kind"] == "heading":
+                        break  # 进入下一节，摘要缺失
+                    if nb["kind"] != "paragraph":
+                        continue
+                    if re.match(r"^(关键词|关键字|key\s*words)", nb["text"], re.I):
+                        continue
+                    body = nb["text"]
+                    break
+            abstract = body or None
         # 关键词
         if not keywords:
             mkw = re.match(r"^(关键词|关键字|key\s*words)[：:\s]*(.+)$", t, re.I)
