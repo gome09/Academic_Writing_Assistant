@@ -101,6 +101,13 @@ def _split_special_chapters(chapters):
                     if line:
                         references.append(line)
         elif _DROP_TITLE.match(t):
+            n = len(ch.get("paras", [])) + sum(
+                len(s.get("paras", []))
+                + sum(len(s3.get("paras", [])) for s3 in s.get("subs", []))
+                for s in ch.get("subs", []))
+            if n:
+                print(f"  [提示] 已从正文剔除章节《{ch['title']}》（{n} 段）"
+                      "——摘要/目录/致谢/附录不进入正文")
             continue
         else:
             body.append(ch)

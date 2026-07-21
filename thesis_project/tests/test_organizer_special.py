@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from src import organizer
 from src.organizer import organize
 from tests.factories import h, p, doc
 
@@ -33,3 +34,28 @@ def test_default_reference_kept_when_no_ref_chapter():
     thesis, _ = organize(docs)
     assert len(thesis["references"]) == 1
     assert "GB/T 7714" in thesis["references"][0]
+
+
+def test_dropped_chapter_with_content_prints_notice(capsys):
+    chapters = [
+        {"title": "绪论", "level": 1, "paras": ["正文。"], "subs": []},
+        {"title": "附录", "level": 1, "paras": ["问卷原文。", "代码清单。"], "subs": []},
+    ]
+    kept, refs = organizer._split_special_chapters(chapters)
+    out = capsys.readouterr().out
+    assert "附录" in out and "2 段" in out
+    assert all(c["title"] != "附录" for c in kept)
+
+
+def test_dropped_empty_chapter_silent(capsys):
+    chapters = [{"title": "目录", "level": 1, "paras": [], "subs": []}]
+    organizer._split_special_chapters(chapters)
+    assert capsys.readouterr().out == ""
+
+
+def test_dropped_chapter_counts_nested_sub_paras(capsys):
+    chapters = [{"title": "附录", "level": 1, "paras": [], "subs": [
+        {"title": "附录A", "level": 2, "paras": ["x"], "subs": [
+            {"title": "A.1", "level": 3, "paras": ["y"], "subs": []}]}]}]
+    organizer._split_special_chapters(chapters)
+    assert "2 段" in capsys.readouterr().out
