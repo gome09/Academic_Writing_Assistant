@@ -210,6 +210,10 @@ def read_docx(path: str) -> dict:
                 blocks.append(_block("heading", text, level=int(m.group(1))))
             elif style.startswith("list") or style.startswith("bullet"):
                 blocks.append(_block("list_item", text))
+            elif _looks_like_manual_heading(text):
+                hm = _PDF_HEADING.match(text)
+                blocks.append(_block("heading", text,
+                                     level=_pdf_heading_level(hm.group(1))))
             else:
                 blocks.append(_block("paragraph", text))
         elif el.tag == qn("w:tbl"):
@@ -250,7 +254,24 @@ def _pdf_heading_level(prefix: str) -> int:
     return min(m.group(0).count(".") + 1, 3) if m else 1
 
 
-_PDF_HEADING = re.compile(r"^(第\s*[一二三四五六七八九十百\d]+\s*章|\d+(\.\d+)*[\s、.．])")
+_PDF_HEADING = re.compile(
+    r"^(第\s*[一二三四五六七八九十百\d]+\s*章"
+    r"|(?!\d{4}(?:[\s年]|$))\d+(\.\d+)*[\s、.．])")
+
+
+def _looks_like_manual_heading(text: str) -> bool:
+    """无标题样式但形如标题：编号开头 + 短（≤25字）+ 不含句中/句末标点。"""
+    if len(text) > 25 or re.search(r"[。！？；，,;]", text):
+        return False
+    m = _PDF_HEADING.match(text)
+    if not m:
+        return False
+    # 「第X章」后须跟空白或行尾，避免「第一章正文」这类连写句子被误判为标题
+    # （数字编号分支的正则本身已要求编号后带分隔符，无需再查）。
+    if "章" in m.group(1):
+        rest = text[m.end():]
+        return not rest or rest[0].isspace()
+    return True
 
 
 def _pdf_lines_to_blocks(txt: str, blocks: list) -> None:
