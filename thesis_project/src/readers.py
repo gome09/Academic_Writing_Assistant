@@ -11,10 +11,12 @@
     }
 
     Block = {
-        "kind": "heading|paragraph|list_item|table|code",
+        "kind": "heading|paragraph|list_item|table|code|image",
         "level": int,        # heading 级别，非标题为 0
         "text": "纯文本",
         "rows": [[...]],     # 仅 table
+        "data": b"...",      # 仅 image：原始字节
+        "ext": ".png",       # 仅 image：扩展名
     }
 
 设计原则：
@@ -201,6 +203,17 @@ def read_docx(path: str) -> dict:
     for el in doc.element.body:
         if el.tag == qn("w:p"):
             p = Paragraph(el, doc)
+            # 段内图片：a:blip 的 r:embed 指向图片关系部件。
+            # 必须先提图片再做空文本跳过——图片段落通常没有文字。
+            for blip in el.findall(".//" + qn("a:blip")):
+                rid = blip.get(qn("r:embed"))
+                part = doc.part.related_parts.get(rid) if rid else None
+                if part is None:
+                    continue
+                b = _block("image")
+                b["data"] = part.blob
+                b["ext"] = os.path.splitext(str(part.partname))[1].lower() or ".png"
+                blocks.append(b)
             text = _clean(p.text)
             if not text:
                 continue
@@ -325,8 +338,10 @@ def read_pdf(path: str) -> dict:
         pdfplumber = None
 
     if pdfplumber is not None:
+        img_count = 0
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages:
+                img_count += len(page.images)
                 # 表格（find_tables 以便拿到 bbox 用于正文去重）
                 tables = page.find_tables()
                 bboxes = []
@@ -348,6 +363,9 @@ def read_pdf(path: str) -> dict:
                 target = page.filter(_outside) if bboxes else page
                 txt = target.extract_text() or ""
                 _pdf_lines_to_blocks(txt, blocks)
+        if img_count:
+            print(f"  [提示] {os.path.basename(path)}：检测到 {img_count} 张图片，"
+                  "PDF 图片暂不导入，请在草案中手工补图")
     else:
         # 退化到 pypdf
         try:
