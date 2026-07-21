@@ -193,7 +193,7 @@ def rebuild_deck(thesis: dict) -> dict:
         mapping = {}
     meta = {"title": thesis["title"], "author": thesis["author"]}
     return _build_deck(meta, thesis["chapters"],
-                       classify_fn=lambda t: mapping.get(t) or _classify(t),
+                       classify_fn=lambda t: mapping.get(_norm_title(t)) or _classify(t),
                        bullets_fn=_safe_bullets)
 
 
