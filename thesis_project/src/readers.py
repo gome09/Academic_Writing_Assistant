@@ -141,8 +141,7 @@ def read_md(path: str) -> dict:
 #  JSON —— 支持两类：结构化大纲 或 任意数据
 # ---------------------------------------------------------------------------
 def read_json(path: str) -> dict:
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        data = json.load(f)
+    data = json.loads(_read_text(path))
 
     blocks = []
     meta = {}
@@ -193,25 +192,33 @@ def read_docx(path: str) -> dict:
 
     doc = docx.Document(path)
     blocks = []
-    for p in doc.paragraphs:
-        text = _clean(p.text)
-        if not text:
-            continue
-        style = (p.style.name or "").lower()
-        m = re.search(r"heading\s*(\d)", style)
-        if m:
-            blocks.append(_block("heading", text, level=int(m.group(1))))
-        elif style.startswith("list") or style.startswith("bullet"):
-            blocks.append(_block("list_item", text))
-        else:
-            blocks.append(_block("paragraph", text))
+    # 按 body 的 XML 子元素顺序混排段落与表格，保留表格在原文中的位置
+    # （body 里还有 w:sectPr 等其它元素，跳过即可）。
+    from docx.oxml.ns import qn
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
-    for t in doc.tables:
-        rows = []
-        for row in t.rows:
-            rows.append([_clean(c.text) for c in row.cells])
-        if rows:
-            blocks.append(_block("table", "", rows=rows))
+    for el in doc.element.body:
+        if el.tag == qn("w:p"):
+            p = Paragraph(el, doc)
+            text = _clean(p.text)
+            if not text:
+                continue
+            style = (p.style.name or "").lower()
+            m = re.search(r"heading\s*(\d)", style)
+            if m:
+                blocks.append(_block("heading", text, level=int(m.group(1))))
+            elif style.startswith("list") or style.startswith("bullet"):
+                blocks.append(_block("list_item", text))
+            else:
+                blocks.append(_block("paragraph", text))
+        elif el.tag == qn("w:tbl"):
+            t = Table(el, doc)
+            rows = []
+            for row in t.rows:
+                rows.append([_clean(c.text) for c in row.cells])
+            if rows:
+                blocks.append(_block("table", "", rows=rows))
 
     meta = {}
     cp = doc.core_properties

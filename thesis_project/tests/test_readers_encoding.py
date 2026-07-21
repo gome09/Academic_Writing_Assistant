@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from src.readers import read_txt, read_md, _read_text
+import json
+
+from src.readers import read_txt, read_md, read_json, _read_text
 
 
 def test_read_txt_gbk(tmp_path):
@@ -29,3 +31,14 @@ def test_read_text_invalid_bytes_no_crash(tmp_path):
     f.write_bytes(b"\xff\xfe\x00invalid\x80")
     # 不抛异常即可（最后兜底 errors="replace"）
     assert isinstance(_read_text(str(f)), str)
+
+
+def test_read_json_gbk(tmp_path):
+    f = tmp_path / "gbk.json"
+    data = {"title": "毕业论文大纲", "content": "第一章：绪论内容。"}
+    f.write_bytes(json.dumps(data, ensure_ascii=False).encode("gbk"))
+    d = read_json(str(f))
+    headings = [b["text"] for b in d["blocks"] if b["kind"] == "heading"]
+    paras = [b["text"] for b in d["blocks"] if b["kind"] == "paragraph"]
+    assert "毕业论文大纲" in headings
+    assert "第一章：绪论内容。" in paras
