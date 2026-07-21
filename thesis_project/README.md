@@ -91,6 +91,7 @@ pip install python-docx python-pptx pdfplumber
 | `LLM_API_KEY` | 是 | API 密钥；未设置时自动跳过增强 |
 | `LLM_BASE_URL` | 否 | OpenAI 兼容端点，如 DeepSeek/通义/Kimi/本地 Ollama |
 | `LLM_MODEL` | 否 | 模型名，默认 `gpt-4o-mini` |
+| `LLM_TIMEOUT` | 否 | 单步超时秒数，默认 60 |
 
 增强内容：元信息抽取（题目/作者/摘要/关键词）、英文摘要与关键词翻译、
 PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档的语义分章。

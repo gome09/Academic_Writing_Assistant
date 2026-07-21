@@ -6,6 +6,7 @@ LLM 增强层 —— 通过 OpenAI 兼容接口提升草案质量（可选，失
     LLM_API_KEY    必填；未设置则增强层整体跳过
     LLM_BASE_URL   选填；默认官方 OpenAI；可指向 DeepSeek/通义/Kimi/Ollama 等兼容端点
     LLM_MODEL      选填；默认 gpt-4o-mini
+    LLM_TIMEOUT    选填；单步超时秒数，默认 60
 
 原则：
   - LLM 只做「整理 / 提炼 / 翻译 / 分类」，不扩写正文、不编造事实。
@@ -32,8 +33,10 @@ def is_available() -> bool:
 
 def _client():
     from openai import OpenAI
+    timeout = float(os.environ.get("LLM_TIMEOUT", "60"))
     return OpenAI(api_key=os.environ["LLM_API_KEY"],
-                  base_url=os.environ.get("LLM_BASE_URL") or None)
+                  base_url=os.environ.get("LLM_BASE_URL") or None,
+                  timeout=timeout, max_retries=1)
 
 
 def _chat(system: str, user: str) -> str:
