@@ -141,9 +141,9 @@ def _extract_meta(docs):
                 and t and not _looks_generic(t)):
             title = t
         # 摘要
-        if abstract is None and re.match(r"^(摘，?要|abstract)", t, re.I):
+        if abstract is None and re.match(r"^(摘[，\s]*要|abstract)", t, re.I):
             # 摘要正文：同块去掉标签，或取下一段
-            body = re.sub(r"^(摘，?要|abstract)[：: \\s]*", "", t, flags=re.I).strip()
+            body = re.sub(r"^(摘[，\s]*要|abstract)[：:\s]*", "", t, flags=re.I).strip()
             if len(body) < 10 and i + 1 < len(all_blocks):
                 body = all_blocks[i + 1]["text"]
             abstract = body
