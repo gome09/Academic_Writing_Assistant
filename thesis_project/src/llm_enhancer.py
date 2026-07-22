@@ -197,18 +197,70 @@ def _safe_bullets(paras) -> list:
         return _to_bullets(paras)
 
 
+_BULLET_BATCH_SYS = ("你是答辩PPT助手。为每一章提炼要点：每章最多6条，"
+                     "每条不超过40字，只做压缩改写，不得新增事实。"
+                     '只输出 JSON：{"章节标题": ["要点", ...], ...}')
+
+
+def _llm_bullets_batch(sections: dict) -> dict:
+    """一次请求为全部章节提炼要点。sections: {标题: [段落...]}。
+
+    返回 {归一化标题: bullets}；结果非 dict 时抛错交上层回退。
+    占位符段落不发给 LLM；过滤后为空的章节不进 payload（回退规则提炼）。
+    """
+    from src.organizer import PLACEHOLDER
+    payload = {t: "\n".join(p for p in ps if p and p != PLACEHOLDER)[:2000]
+               for t, ps in sections.items()}
+    payload = {t: v for t, v in payload.items() if v.strip()}
+    if not payload:
+        return {}
+    data = _chat_json(_BULLET_BATCH_SYS,
+                      json.dumps(payload, ensure_ascii=False))
+    if not isinstance(data, dict):
+        raise ValueError("批量要点结果不是 JSON 对象")
+    out = {}
+    for k, v in data.items():
+        if isinstance(v, list):
+            bullets = [str(x).strip()[:40] for x in v if str(x).strip()]
+            if bullets:
+                out[_norm_title(str(k))] = bullets[:6]
+    return out
+
+
 def rebuild_deck(thesis: dict) -> dict:
-    """用 LLM 分类 + LLM 要点重建 PPT 大纲；分类失败整体回退规则分类。"""
-    from src.organizer import _build_deck, _classify
+    """LLM 分类 + 批量要点重建 PPT 大纲；任一步失败回退规则实现。"""
+    from src.organizer import _build_deck, _classify, _to_bullets
     try:
         mapping = classify_chapters([c["title"] for c in thesis["chapters"]])
     except Exception as e:  # noqa: BLE001
         print(f"  [LLM告警] 章节分类失败，改用关键词规则：{e}")
         mapping = {}
+
+    sections = {}
+    for ch in thesis["chapters"]:
+        paras = list(ch["paras"])
+        for sub in ch.get("subs", []):
+            paras.extend(sub["paras"])
+            for sub3 in sub.get("subs", []):
+                paras.extend(sub3["paras"])
+        sections[ch["title"]] = paras
+    try:
+        batch = _llm_bullets_batch(sections)
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] 批量要点失败，改用规则提炼：{e}")
+        batch = {}
+
+    def bullets_fn(paras, title=None):
+        if title is not None:
+            hit = batch.get(_norm_title(title))
+            if hit:
+                return hit
+        return _to_bullets(paras)
+
     meta = {"title": thesis["title"], "author": thesis["author"]}
     return _build_deck(meta, thesis["chapters"],
                        classify_fn=lambda t: mapping.get(_norm_title(t)) or _classify(t),
-                       bullets_fn=_safe_bullets)
+                       bullets_fn=bullets_fn)
 
 
 # ---------------------------------------------------------------------------

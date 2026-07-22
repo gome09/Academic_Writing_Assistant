@@ -42,7 +42,7 @@ def test_rebuild_deck_uses_llm_classify_and_bullets(monkeypatch):
     def fake_chat_json(system, user):
         if "分类" in system or "background" in system:
             return {"某个古怪标题": "result"}
-        return {"bullets": ["LLM要点"]}
+        return {"某个古怪标题": ["LLM要点"]}   # 批量要点：{标题: bullets}
     monkeypatch.setattr(llm_enhancer, "_chat_json", fake_chat_json)
     deck = llm_enhancer.rebuild_deck(_thesis())
     slides = deck["slides"]

@@ -299,7 +299,7 @@ def _table_to_text(block):
 # ---------------------------------------------------------------------------
 #  提炼要点（给 PPT）
 # ---------------------------------------------------------------------------
-def _to_bullets(paras, max_bullets=12, max_len=40):
+def _to_bullets(paras, max_bullets=12, max_len=40, title=None):
     bullets = []
     for p in paras:
         # 按句号/分号切，取较短句作要点
@@ -367,7 +367,11 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
             paras.extend(sub["paras"])
             for sub3 in sub.get("subs", []):
                 paras.extend(sub3["paras"])
-        buckets[key].append({"title": ch["title"], "bullets": to_bullets(paras)})
+        try:
+            bl = to_bullets(paras, title=ch["title"])
+        except TypeError:      # 注入的 bullets_fn 不接受 title 时退回旧签名
+            bl = to_bullets(paras)
+        buckets[key].append({"title": ch["title"], "bullets": bl})
 
     slides = []
     slides.append({"type": "cover", "title": meta["title"],
