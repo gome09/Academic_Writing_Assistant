@@ -137,3 +137,4 @@ python src/main.py --llm
 
 改 `config/format_spec.py` 里的 `WORD_SPEC` / `PPT_SPEC` 常量即可全局调整字号、
 页边距、行距、配色、PPT 结构段，无需改动生成逻辑。
+个别标注 `# 暂未落实` 的字段目前仅作文档参考，修改不会影响产物。

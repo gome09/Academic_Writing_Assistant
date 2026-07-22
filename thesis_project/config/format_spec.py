@@ -18,8 +18,8 @@
 WORD_SPEC = {
     # ---- 页面 ----
     "page": {
-        "size": "A4",              # 210mm x 297mm
-        "orientation": "portrait",
+        "size": "A4",              # 暂未落实（210mm x 297mm；页面尺寸在 docx_builder.py 硬编码）
+        "orientation": "portrait", # 暂未落实
         "margin_top_cm": 2.5,
         "margin_bottom_cm": 2.5,
         "margin_left_cm": 2.5,     # 含装订线，靠左
@@ -49,21 +49,21 @@ WORD_SPEC = {
             "size_pt": 16,          # 三号
             "bold": True, "alignment": "center",
             "space_before_pt": 24, "space_after_pt": 18,
-            "line_spacing": 1.0, "outline_level": 0,
+            "line_spacing": 1.0, "outline_level": 0,   # outline_level 暂未落实
         },
         2: {  # 节标题
             "font_cn": "黑体", "font_en": "Times New Roman",
             "size_pt": 14,          # 四号
             "bold": True, "alignment": "left",
             "space_before_pt": 24, "space_after_pt": 6,
-            "line_spacing_pt": 20, "outline_level": 1,
+            "line_spacing_pt": 20, "outline_level": 1, # outline_level 暂未落实
         },
         3: {  # 条标题
             "font_cn": "黑体", "font_en": "Times New Roman",
             "size_pt": 13,
             "bold": True, "alignment": "left",
             "space_before_pt": 12, "space_after_pt": 6,
-            "line_spacing_pt": 20, "outline_level": 2,
+            "line_spacing_pt": 20, "outline_level": 2, # outline_level 暂未落实
         },
     },
 
@@ -87,8 +87,8 @@ WORD_SPEC = {
     "toc": {
         "title": "目  录",
         "levels": 3,               # 列至三级标题
-        "leader": "dot",           # 圆点前导符
-        "page_number_align": "right",
+        "leader": "dot",           # 暂未落实（圆点前导符）
+        "page_number_align": "right",  # 暂未落实
     },
 
     # ---- 图 / 表 ----
@@ -115,7 +115,7 @@ WORD_SPEC = {
 
     # ---- 参考文献 ----
     "reference": {
-        "standard": "GB/T 7714",
+        "standard": "GB/T 7714",   # 暂未落实
         "title": "参考文献",
     },
 }
@@ -128,7 +128,7 @@ WORD_SPEC = {
 PPT_SPEC = {
     # ---- 画布 ----
     "slide": {
-        "ratio": "16:9",
+        "ratio": "16:9",               # 暂未落实（实际尺寸取自 width_inch/height_inch）
         "width_inch": 13.333,
         "height_inch": 7.5,
     },
@@ -137,7 +137,7 @@ PPT_SPEC = {
     "font": {
         "family_cn": "微软雅黑",       # 更正式、易把握
         "family_en": "Arial",
-        "max_font_kinds": 3,
+        "max_font_kinds": 3,           # 暂未落实
     },
 
     # ---- 字号层级 ----
@@ -152,10 +152,10 @@ PPT_SPEC = {
     # ---- 版面约束 ----
     "layout": {
         "max_bullets_per_slide": 6,    # 每页要点 <=6~8
-        "max_lines_per_bullet": 2,
-        "content_max_ratio": 0.66,     # 内容 <= 2/3 页面
-        "text_align": "left",          # 左对齐，避免居中难读
-        "background": "white",         # 白底利于表格/公式/数据
+        "max_lines_per_bullet": 2,     # 暂未落实
+        "content_max_ratio": 0.66,     # 暂未落实（内容 <= 2/3 页面）
+        "text_align": "left",          # 暂未落实（左对齐，避免居中难读）
+        "background": "white",         # 暂未落实（白底利于表格/公式/数据）
     },
 
     # ---- 结构（15~20 页；问题->方法->结果->启示）----
@@ -173,9 +173,9 @@ PPT_SPEC = {
     "principle": {
         "total_slides_min": 15,
         "total_slides_max": 20,
-        "talk_minutes": 10,
-        "rule": "10/20/30",            # 10页/20分钟/字号>=30
-        "narrative": ["问题", "方法", "结果", "启示"],
+        "talk_minutes": 10,            # 暂未落实
+        "rule": "10/20/30",            # 暂未落实（10页/20分钟/字号>=30）
+        "narrative": ["问题", "方法", "结果", "启示"],  # 暂未落实
     },
 
     # ---- 主题配色（简洁、白底 + 一个主色）----
