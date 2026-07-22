@@ -182,3 +182,55 @@ def build_outline(topic: dict, cards: list, img_notes: list) -> list:
     except Exception as e:  # noqa: BLE001
         _note_degrade("大纲生成", e)
         return _default_outline(len(cards))
+
+
+# ---------------------------------------------------------------------------
+#  ③ 综述章撰写
+# ---------------------------------------------------------------------------
+_REVIEW_SYS = (
+    "你是学术写作助手，为本科毕业论文撰写文献综述章节的初稿段落。"
+    "只能综合给定摘要卡的信息，禁止编造数据与文献；"
+    "引用某张卡片的内容时，在句末用其方括号编号标注（如[1]）。"
+    "输出 3~6 个中文段落，每段 100~200 字。")
+
+
+def _card_brief(idx: int, card: dict) -> str:
+    """卡片 -> 提示词行；idx 为全局 1-based 引用编号。"""
+    bits = [f"[{idx}] {card['title']}"]
+    for k, label in (("topic", "主题"), ("method", "方法"),
+                     ("conclusion", "结论")):
+        if card.get(k):
+            bits.append(f"{label}：{card[k]}")
+    if card.get("quotes"):
+        bits.append("观点：" + "；".join(card["quotes"][:3]))
+    if card.get("fallback_text"):
+        bits.append("原文片段：" + card["fallback_text"][:300])
+    return "。".join(bits)
+
+
+def _material_paras(ch: dict, cards: list) -> list:
+    """综述降级产物：素材摘录 + 占位符。"""
+    paras = ["素材摘录（LLM 综述失败，以下为原始卡片信息）："]
+    for i in ch["cards"]:
+        paras.append(_card_brief(i + 1, cards[i]))
+    paras.append(PLACEHOLDER)
+    return paras
+
+
+def write_review(ch: dict, topic: dict, cards: list) -> list:
+    """综述章 -> 正文段落列表（每段带 AI_MARK）；失败退素材摘录。"""
+    briefs = [_card_brief(i + 1, cards[i]) for i in ch["cards"]]
+    try:
+        data = _chat_json(
+            _REVIEW_SYS,
+            '请以 JSON 输出 {"paras": ["段落1", "段落2"]}。\n'
+            f"论文题目：{topic['title']}\n章节标题:{ch['title']}\n\n"
+            "文献摘要卡：\n" + "\n".join(briefs))
+        paras = [str(p).strip() for p in (data.get("paras") or [])
+                 if str(p).strip()] if isinstance(data, dict) else []
+        if not paras:
+            raise ValueError("综述结果没有段落")
+        return [f"{p} {AI_MARK}" for p in paras]
+    except Exception as e:  # noqa: BLE001
+        _note_degrade(f"《{ch['title']}》综述", e)
+        return _material_paras(ch, cards)
