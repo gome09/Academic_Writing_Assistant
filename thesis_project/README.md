@@ -57,6 +57,8 @@ python src/main.py --only word                 # 只生成 Word
 python src/main.py --only ppt                  # 只生成 PPT
 python src/main.py --output 某输出目录          # 自定义输出目录
 python src/main.py --llm                       # 用 LLM 增强草稿质量（可选）
+python src/main.py --refresh-fields            # 生成后用本机 Word 刷新目录/页码域
+python src/main.py --pdf                       # 刷新域并导出 PDF（隐含 --refresh-fields）
 ```
 
 > **Windows 提示**：请用 `python`（不要用 `python3`，它可能是应用商店占位程序）。

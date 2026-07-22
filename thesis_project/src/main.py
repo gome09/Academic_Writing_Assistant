@@ -88,6 +88,10 @@ def main():
     ap.add_argument("--llm", action="store_true",
                     help="用 LLM 增强草案质量（需设置 LLM_API_KEY，"
                          "可选 LLM_BASE_URL / LLM_MODEL，OpenAI 兼容接口）")
+    ap.add_argument("--refresh-fields", action="store_true",
+                    help="生成后用本机 Word 静默刷新目录/页码域（需已装 Word 和 pywin32）")
+    ap.add_argument("--pdf", action="store_true",
+                    help="刷新域后同时导出 PDF（隐含 --refresh-fields）")
     args = ap.parse_args()
 
     os.makedirs(args.output, exist_ok=True)
@@ -117,6 +121,9 @@ def main():
         wp = _build_with_retry(docx_builder.build, thesis, wp)
         if wp:
             print(f"  ✔ Word: {wp}")
+            if args.refresh_fields or args.pdf:
+                from src import postprocess
+                postprocess.refresh_word_fields(wp, export_pdf=args.pdf)
         else:
             ok = False
     if args.only != "word":
