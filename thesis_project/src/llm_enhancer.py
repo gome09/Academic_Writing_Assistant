@@ -39,20 +39,31 @@ def _client():
                   timeout=timeout, max_retries=1)
 
 
-def _chat(system: str, user: str) -> str:
-    """单轮对话，返回原始文本。唯一网络出口，便于测试打桩。"""
-    resp = _client().chat.completions.create(
-        model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
-        messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
-        temperature=0.2,
-    )
+def _chat(system: str, user: str, json_mode: bool = False) -> str:
+    """单轮对话，返回原始文本。唯一网络出口，便于测试打桩。
+
+    json_mode=True 时尝试 response_format 强制 JSON 输出，
+    端点不支持则自动降级为普通请求。
+    """
+    kwargs = {"model": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+              "messages": [{"role": "system", "content": system},
+                           {"role": "user", "content": user}],
+              "temperature": 0.2}
+    if json_mode:
+        try:
+            resp = _client().chat.completions.create(
+                response_format={"type": "json_object"}, **kwargs)
+            return resp.choices[0].message.content or ""
+        except Exception as e:  # noqa: BLE001 端点不支持 response_format 时降级
+            print(f"  [LLM告警] json_mode 请求失败，降级为普通请求：{e}")
+    resp = _client().chat.completions.create(**kwargs)
     return resp.choices[0].message.content or ""
 
 
 def _chat_json(system: str, user: str):
     """要求模型输出 JSON 并解析；容忍代码块包裹与前后废话。"""
-    text = _chat(system + "\n只输出 JSON，不要任何其它文字。", user)
+    text = _chat(system + "\n只输出 JSON，不要任何其它文字。", user,
+                 json_mode=True)
     m = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if m:
         text = m.group(1)
