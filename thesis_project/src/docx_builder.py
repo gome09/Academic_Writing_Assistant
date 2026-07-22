@@ -7,7 +7,7 @@ Word 生成器 —— 按 WORD_SPEC 生成本科毕业论文草案 (.docx)。
   - 正文：宋体/Times New Roman、小四(12pt)、固定行距 20 磅、首行缩进 2 字符、两端对齐
   - 标题 1/2/3：黑体 三号/四号/13pt，段前段后间距，套用内置样式 -> 可自动生成目录
   - 摘要(小二加粗居中) / 关键词 / 英文摘要
-  - 目录域(TOC field) 占位，Word 打开后 F9 更新
+  - 目录域(TOC field) 占位，settings 写 updateFields=true，Word 打开时提示更新（或按 F9）
   - 参考文献标题
   - 中文字体通过 w:eastAsia 正确设置（python-docx 默认只设置西文字体）
 """
@@ -155,10 +155,29 @@ def _add_toc(doc):
     levels = min(max(t["levels"], 1), 9)   # 直接采用 spec 值，clamp 到 Word 允许的 1..9
     instr.text = f'TOC \\o "1-{levels}" \\h \\z \\u'
     fldSep = OxmlElement("w:fldChar"); fldSep.set(qn("w:fldCharType"), "separate")
-    hint = OxmlElement("w:t"); hint.text = "【在 Word 中按 F9 更新目录】"
+    hint = OxmlElement("w:t"); hint.text = "【打开文档后按提示更新域，或按 F9】"
     fldEnd = OxmlElement("w:fldChar"); fldEnd.set(qn("w:fldCharType"), "end")
     for el in (fldBegin, instr, fldSep, hint, fldEnd):
         run._element.append(el)
+
+
+def _enable_update_fields(doc):
+    """settings.xml 写 updateFields=true：Word 打开时提示一键更新目录/页码域。
+
+    按 ECMA-376 CT_Settings 序列，updateFields 须位于 footnotePr/endnotePr/compat
+    等元素之前，故用锚点插入而非直接 append。
+    """
+    settings = doc.settings.element
+    if settings.find(qn("w:updateFields")) is not None:
+        return
+    el = OxmlElement("w:updateFields")
+    el.set(qn("w:val"), "true")
+    for tag in ("w:footnotePr", "w:endnotePr", "w:compat"):
+        anchor = settings.find(qn(tag))
+        if anchor is not None:
+            anchor.addprevious(el)
+            return
+    settings.append(el)
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +327,7 @@ def build(thesis, out_path):
                    "size_pt": 10.5, "line_spacing_pt": 20})
 
     _setup_page_numbers(doc)
+    _enable_update_fields(doc)
     doc.save(out_path)
     return out_path
 

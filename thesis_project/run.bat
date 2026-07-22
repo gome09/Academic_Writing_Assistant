@@ -49,7 +49,7 @@ if errorlevel 1 (
 echo.
 
 REM ---- 运行主程序 ----
-REM ---- 透传额外参数：编辑本文件在本行后加 --llm 等开关 ----
+REM ---- 透传额外参数：编辑本文件在本行后加 --llm 等开关 ----
 %PY% -u src\main.py --input "%INPUT%" --output output
 set "RC=%errorlevel%"
 echo.
@@ -59,7 +59,7 @@ if "%RC%"=="0" (
     echo   完成！草案已生成到 output\ 目录：
     echo     - output\论文草案.docx
     echo     - output\答辩PPT草案.pptx
-    echo   提示：Word 打开后按 F9 更新目录；替换 ^<请填写^> 占位符。
+    echo   提示：Word 打开后按提示更新域（或按 F9 更新目录）；替换 ^<请填写^> 占位符。
     echo ============================================================
     REM 自动打开 output 目录
     start "" "%cd%\output"

@@ -128,7 +128,7 @@ def main():
             ok = False
 
     print("=" * 56)
-    print("完成。请打开草案：Word 中按 F9 更新目录；两份均需人工润色占位符 <请填写>。")
+    print("完成。请打开草案：Word 打开时按提示更新域（或按 F9 更新目录）；两份均需人工润色占位符 <请填写>。")
     return 0 if ok else 1
 
 
