@@ -269,3 +269,39 @@ def write_points(chapters: list, topic: dict, cards: list) -> dict:
     except Exception as e:  # noqa: BLE001
         _note_degrade("写作要点", e)
         return {}
+
+
+# ---------------------------------------------------------------------------
+#  ⑤ 参考文献表（GB/T 7714）
+# ---------------------------------------------------------------------------
+_GBT_SYS = (
+    "你是参考文献格式化助手。把给定文献元数据逐条格式化为 GB/T 7714 著录条目，"
+    "严格按输入顺序输出、数量一致。信息缺失处用«请补全»标注，"
+    "禁止编造卷期页码等信息。")
+
+
+def _raw_references(cards: list) -> list:
+    return [f"{c['title']}. «请补全著录信息»（来源文件：{c['source']}）"
+            for c in cards]
+
+
+def format_references(cards: list) -> list:
+    """摘要卡 -> GB/T 7714 条目列表（顺序即 [n] 引用编号）；失败罗列标题。"""
+    if not cards:
+        return []
+    payload = [{"title": c["title"], "authors": c.get("authors", []),
+                "year": c.get("year", ""), "source": c["source"]}
+               for c in cards]
+    try:
+        data = _chat_json(
+            _GBT_SYS,
+            '请以 JSON 输出 {"references": ["条目1", "条目2"]}：\n'
+            + json.dumps(payload, ensure_ascii=False))
+        refs = [str(r).strip() for r in (data.get("references") or [])
+                if str(r).strip()] if isinstance(data, dict) else []
+        if len(refs) != len(cards):
+            raise ValueError(f"条目数不符：{len(refs)} != {len(cards)}")
+        return refs
+    except Exception as e:  # noqa: BLE001
+        _note_degrade("参考文献格式化", e)
+        return _raw_references(cards)
