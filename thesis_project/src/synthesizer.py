@@ -376,3 +376,61 @@ def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
                         f"内容摘要：{note['summary']} {AI_MARK}）")
                 else:
                     ch["paras"].append(f"（插图来自：{name}，图题请补全）")
+
+
+# ---------------------------------------------------------------------------
+#  总入口
+# ---------------------------------------------------------------------------
+def synthesize(topic_doc: dict, ref_docs: list) -> dict:
+    """参考资料 -> thesis dict（与 organizer.organize 同构，仅 Word 用）。"""
+    del _degraded[:]
+    topic = parse_topic(topic_doc)
+    text_docs = [d for d in ref_docs if d["type"] not in _MEDIA_TYPES]
+    media_docs = [d for d in ref_docs if d["type"] in _MEDIA_TYPES]
+
+    print(f"  文献 {len(text_docs)} 篇，数据/截图 {len(media_docs)} 个")
+    cards = make_cards(text_docs)
+    img_notes = describe_images(media_docs)
+    outline = build_outline(topic, cards, img_notes)
+
+    chapters = []
+    for spec_ch in outline:
+        ch = _node(spec_ch["title"], 1)
+        ch["kind"] = spec_ch["kind"]
+        if spec_ch["kind"] == "review":
+            ch["paras"].append("【提示】" + REFS_SPEC["review_notice"])
+            ch["paras"].extend(write_review(spec_ch, topic, cards))
+        chapters.append(ch)
+
+    plain = [spec_ch for spec_ch in outline if spec_ch["kind"] != "review"]
+    points = write_points(plain, topic, cards)
+    by_title = {ch["title"]: ch for ch in chapters}
+    for spec_ch in plain:
+        ch = by_title[spec_ch["title"]]
+        pts = points.get(ch["title"])
+        if pts:
+            ch["paras"].append("【写作要点】")
+            ch["paras"].extend(f"· {p}" for p in pts)
+        quotes = [f"[{i + 1}] {q}" for i in spec_ch["cards"]
+                  for q in cards[i].get("quotes", [])[:2]]
+        if quotes:
+            ch["paras"].append("素材摘录：")
+            ch["paras"].extend(quotes)
+        ch["paras"].append(PLACEHOLDER)
+
+    attach_media(chapters, media_docs, img_notes)
+    references = format_references(cards)
+
+    if _degraded:
+        print(f"  [提示] 本次共 {len(_degraded)} 步降级，请检查上方告警。")
+    return {
+        "title": topic["title"],
+        "author": topic["author"],
+        "abstract": PLACEHOLDER,
+        "abstract_en": PLACEHOLDER,
+        "keywords": [PLACEHOLDER],
+        "keywords_en": [PLACEHOLDER],
+        "chapters": chapters,
+        "auto_skeleton": False,
+        "references": references,
+    }
