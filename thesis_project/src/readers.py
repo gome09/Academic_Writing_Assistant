@@ -382,6 +382,37 @@ def read_pdf(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+#  XLSX / CSV
+# ---------------------------------------------------------------------------
+def read_xlsx(path: str) -> dict:
+    """每个非空工作表 -> 一个 table 块。合并单元格的非锚点格读出 None -> ""。
+
+    data_only=True 读公式的缓存计算值；文件从未被 Excel 打开过时可能为
+    None，同样落为空串，属可接受降级。
+    """
+    try:
+        import openpyxl
+    except ImportError:
+        raise RuntimeError("需要 openpyxl：pip install openpyxl")
+    wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    blocks = []
+    try:
+        for ws in wb.worksheets:
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                cells = ["" if c is None else _clean(str(c)) for c in row]
+                if any(cells):
+                    rows.append(cells)
+            if rows:
+                blocks.append(_block("table", "", rows=rows))
+    finally:
+        wb.close()
+    if not blocks:
+        raise RuntimeError("工作簿中没有任何非空工作表")
+    return {"source": path, "type": "xlsx", "blocks": blocks, "meta": {}}
+
+
+# ---------------------------------------------------------------------------
 #  分发
 # ---------------------------------------------------------------------------
 _READERS = {
@@ -392,6 +423,7 @@ _READERS = {
     ".json": read_json,
     ".docx": read_docx,
     ".pdf": read_pdf,
+    ".xlsx": read_xlsx,
 }
 
 
