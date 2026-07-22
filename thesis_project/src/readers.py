@@ -429,6 +429,21 @@ def read_csv(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+#  独立图片（截图等）
+# ---------------------------------------------------------------------------
+def read_image(path: str) -> dict:
+    """整个文件 -> 单个 image 块（原始字节 + 扩展名），供插图与视觉理解。"""
+    with open(path, "rb") as f:
+        data = f.read()
+    if not data:
+        raise RuntimeError("图片文件为空")
+    b = _block("image")
+    b["data"] = data
+    b["ext"] = os.path.splitext(path)[1].lower() or ".png"
+    return {"source": path, "type": "image", "blocks": [b], "meta": {}}
+
+
+# ---------------------------------------------------------------------------
 #  分发
 # ---------------------------------------------------------------------------
 _READERS = {
@@ -441,6 +456,11 @@ _READERS = {
     ".pdf": read_pdf,
     ".xlsx": read_xlsx,
     ".csv": read_csv,
+    ".png": read_image,
+    ".jpg": read_image,
+    ".jpeg": read_image,
+    ".bmp": read_image,
+    ".webp": read_image,
 }
 
 
