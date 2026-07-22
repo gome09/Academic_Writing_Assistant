@@ -86,3 +86,43 @@ def test_synthesize_prints_degrade_summary(monkeypatch, capsys):
     assert len(thesis["references"]) == 1
     out = capsys.readouterr().out
     assert "步降级" in out
+
+
+def _dup_chat_json_factory():
+    """大纲返回两个同名非综述章，验证按位置索引不串内容。"""
+    def fake(system, user):
+        if "文献调研助手" in system:
+            return {"title": "文A", "authors": ["李四"], "year": "2023",
+                    "topic": "tA", "method": "mA", "conclusion": "cA",
+                    "quotes": ["观点A"]}
+        if "论文结构顾问" in system:
+            return {"chapters": [
+                {"title": "绪论", "kind": "intro", "cards": []},
+                {"title": "系统设计", "kind": "core", "cards": [0]},
+                {"title": "系统设计", "kind": "core", "cards": [0]},
+                {"title": "总结与展望", "kind": "conclusion", "cards": []}]}
+        if "学术写作助手" in system:
+            return {"paras": ["综述正文一[1]。"]}
+        if "写作教练" in system:
+            return {"系统设计": ["先画架构图，参考[1]"]}
+        if "参考文献格式化" in system:
+            return {"references": ["李四. 文A[J]. 某刊, 2023."]}
+        raise AssertionError("未知提示词: " + system[:20])
+    return fake
+
+
+def test_synthesize_duplicate_titles_positional(monkeypatch):
+    monkeypatch.setattr(synthesizer, "_chat_json", _dup_chat_json_factory())
+    monkeypatch.delenv("LLM_VISION_MODEL", raising=False)
+    thesis = synthesizer.synthesize(_topic_doc(), [_ref_doc("a.pdf", "正文")])
+
+    titles = [c["title"] for c in thesis["chapters"]]
+    assert titles == ["绪论", "系统设计", "系统设计", "总结与展望"]
+
+    dup = [c for c in thesis["chapters"] if c["title"] == "系统设计"]
+    assert len(dup) == 2
+    # 两个同名章都完整收尾：各自以 PLACEHOLDER 结束，内容不串不缺
+    for ch in dup:
+        assert ch["paras"][-1] == PLACEHOLDER
+        assert ch["paras"].count(PLACEHOLDER) == 1
+        assert ch["paras"].count("【写作要点】") == 1

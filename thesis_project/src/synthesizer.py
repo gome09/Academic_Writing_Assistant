@@ -404,9 +404,9 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
 
     plain = [spec_ch for spec_ch in outline if spec_ch["kind"] != "review"]
     points = write_points(plain, topic, cards)
-    by_title = {ch["title"]: ch for ch in chapters}
-    for spec_ch in plain:
-        ch = by_title[spec_ch["title"]]
+    for spec_ch, ch in zip(outline, chapters):
+        if spec_ch["kind"] == "review":
+            continue
         pts = points.get(ch["title"])
         if pts:
             ch["paras"].append("【写作要点】")
