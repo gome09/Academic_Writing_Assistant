@@ -39,3 +39,18 @@ def test_full_pipeline_sample(tmp_path):
     pp = pptx_builder.build(deck, str(tmp_path / "答辩PPT草案.pptx"))
     assert os.path.getsize(wp) > 0
     assert os.path.getsize(pp) > 0
+
+    # 内容级断言：产物不仅存在，还要包含关键结构
+    import docx as _docx
+    from pptx import Presentation as _P
+
+    d = _docx.Document(wp)
+    all_text = "\n".join(p.text for p in d.paragraphs)
+    assert "参考文献" in all_text
+    assert "[1]" in all_text                      # 参考文献编号
+    assert "关键词" in all_text
+    prs = _P(pp)
+    cover_texts = [sh.text_frame.text for sh in prs.slides[0].shapes
+                   if sh.has_text_frame]
+    assert any(t.strip() for t in cover_texts)    # 封面非空
+    assert len(prs.slides) >= 5
