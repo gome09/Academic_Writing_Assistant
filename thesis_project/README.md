@@ -1,6 +1,6 @@
 # 论文 Word 草案 + 答辩 PPT 草案 生成器
 
-读取你给出的 **Word / PDF / TXT / Markdown / JSON** 源文件，自动整理成结构化内容，
+读取你给出的 **Word / PDF / TXT / Markdown / JSON / Excel(xlsx·csv) / 图片** 源文件，自动整理成结构化内容，
 再按 **本科毕业论文 Word 规范** 和 **答辩 PPT 规范** 生成两份草案：
 `论文草案.docx` 与 `答辩PPT草案.pptx`。
 
@@ -112,6 +112,26 @@ $env:LLM_BASE_URL = "https://api.deepseek.com"
 $env:LLM_MODEL    = "deepseek-chat"
 python src/main.py --llm
 ```
+
+---
+
+## 参考资料模式（题目 + 文献 → 论文初稿骨架）
+
+`input\` 里放一个**题目文件**（`topic.md` / `题目.txt`，写论文题目、研究内容
+简述、拟采用方法）+ 参考文献（PDF/Word/md/txt/json）、数据（xlsx/csv）、
+截图（png/jpg），双击 `run.bat` 即自动进入本模式：
+
+- LLM 生成：文献综述章节（带 [n] 引用）、全文大纲、核心章节【写作要点】
+  与素材摘录、GB/T 7714 参考文献表；
+- LLM 不生成：研究设计/实现/实验等核心章节正文——留 `<请填写>` 由你完成；
+- 只生成 `论文草案.docx`，不生成 PPT（补完正文后用普通模式再生成）；
+- xlsx/csv 自动插表、截图自动插图；设置 `LLM_VISION_MODEL`（如 qwen-vl-plus）
+  后截图还会获得图题建议与内容摘要；
+- **必须**设置 `LLM_API_KEY`（见上节），未设置会报错退出；
+- `--mode refs|draft` 可强制指定模式，覆盖自动检测。
+
+> ⚠ 学术诚信：综述正文全部带 `<AI生成，请核对>` 标记，属于初稿素材，
+> 务必逐条核对原文献后改写为自己的表述再使用。
 
 ---
 

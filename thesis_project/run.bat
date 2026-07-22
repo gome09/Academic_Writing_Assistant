@@ -24,13 +24,13 @@ echo [信息] 使用解释器: %PY%
 echo.
 
 REM ---- 检查并按需安装依赖 ----
-%PY% -c "import docx, pptx, pdfplumber, openai" >nul 2>nul
+%PY% -c "import docx, pptx, pdfplumber, openai, openpyxl" >nul 2>nul
 if errorlevel 1 (
-    echo [信息] 缺少依赖，正在安装 python-docx / python-pptx / pdfplumber / openai ...
-    %PY% -m pip install python-docx python-pptx pdfplumber openai
+    echo [信息] 缺少依赖，正在安装 python-docx / python-pptx / pdfplumber / openai / openpyxl ...
+    %PY% -m pip install python-docx python-pptx pdfplumber openai openpyxl
     if errorlevel 1 (
         echo [错误] 依赖安装失败，请检查网络或手动执行:
-        echo         %PY% -m pip install python-docx python-pptx pdfplumber openai
+        echo         %PY% -m pip install python-docx python-pptx pdfplumber openai openpyxl
         pause
         exit /b 1
     )

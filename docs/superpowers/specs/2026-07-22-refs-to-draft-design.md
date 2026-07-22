@@ -65,9 +65,9 @@ frontmatter 里的 `author` 写入 thesis["author"]（无则占位符）。
 thesis_project/
 ├── src/
 │   ├── readers.py        # 扩展：+read_xlsx +read_csv +read_image
-│   ├── llm_client.py     # 新建：从 llm_enhancer 抽出 _chat/_chat_json/
-│   │                     #   is_available/_client；新增 chat_vision()
-│   ├── llm_enhancer.py   # 改为引用 llm_client，对外行为与测试打桩点不变
+│   ├── llm_vision.py      # 新建：仅承载视觉调用（_chat_vision / describe_image）；
+│   │                     #   文本调用继续经 llm_enhancer._chat（保持既有打桩链）
+│   ├── llm_enhancer.py   # 扩展：抽出 _parse_json 供 llm_vision 复用；对外行为与打桩点不变
 │   ├── synthesizer.py    # 新建：参考资料模式核心（organizer 的平级替代品）
 │   └── main.py           # 改动：topic 检测分流；--mode 参数；refs 模式禁 PPT
 └── config/format_spec.py # 扩展：+REFS_SPEC（默认大纲骨架、综述章名、提示语）
@@ -112,8 +112,9 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
 | 视觉理解 | 每张截图 1 次（仅当 `LLM_VISION_MODEL` 已设置） | 图片 base64 |
 
 - 10 篇文献 + 5 张截图 ≈ 18 次调用；temperature 沿用 0.2。
-- 所有文本调用经 `llm_client._chat`（唯一网络出口，测试打桩点）；视觉调用经
-  `llm_client.chat_vision`（第二个网络出口，同样可打桩）。
+- 所有文本调用经 `llm_enhancer._chat`（既有网络出口，测试打桩点，synthesizer 复用
+  `_chat_json`）；视觉调用经 `llm_vision._chat_vision`（第二个网络出口，同样可打桩）。
+  JSON 解析统一由 `llm_enhancer._parse_json` 承担并被 `llm_vision` 复用。
 - 新增环境变量：`LLM_VISION_MODEL`（选填；未设置则跳过视觉理解）。
 
 ## 5. 错误处理（分级降级）
@@ -137,7 +138,7 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
   写作要点带 AI 标记、媒体挂载、无 Key 入口报错。
 - main：topic 检测分流、`--mode` 覆盖、refs 模式不产 PPT。
 - 端到端：打桩 LLM 跑全流程，校验 docx 章节结构与引用编号。
-- 回归：现有全量测试必须通过（llm_client 抽取后 llm_enhancer 行为不变）。
+- 回归：现有全量测试必须通过（`_parse_json` 抽取、`llm_vision` 新增后 llm_enhancer 行为不变）。
 
 ## 7. 依赖变更
 
