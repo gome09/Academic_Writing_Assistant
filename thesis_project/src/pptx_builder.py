@@ -200,6 +200,8 @@ def build(deck, out_path):
         # 封面/分节/致谢不加页脚
         if s["type"] in ("outline", "content"):
             _footer(slide, idx, total, deck["title"])
+        if s.get("notes"):
+            slide.notes_slide.notes_text_frame.text = s["notes"]
 
     p_min = P["principle"]["total_slides_min"]
     p_max = P["principle"]["total_slides_max"]

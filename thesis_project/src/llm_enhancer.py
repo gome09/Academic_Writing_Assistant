@@ -264,6 +264,39 @@ def rebuild_deck(thesis: dict) -> dict:
 
 
 # ---------------------------------------------------------------------------
+#  演讲备注
+# ---------------------------------------------------------------------------
+_NOTES_SYS = ("你是答辩教练。为每页幻灯片写80~120字的口语化演讲备注，"
+              "只依据给定要点组织语言，不得编造数据或结论。"
+              '只输出 JSON：{"页标题": "备注", ...}')
+
+
+def add_speaker_notes(deck: dict) -> bool:
+    """为 content 页生成演讲备注写入 slide["notes"]；失败不影响主流程。
+
+    返回是否成功（无 content 页视为成功），供调用方决定完成提示。
+    """
+    contents = [s for s in deck.get("slides", []) if s.get("type") == "content"]
+    if not contents:
+        return True
+    payload = {s.get("title", ""): s.get("bullets", []) for s in contents}
+    try:
+        data = _chat_json(_NOTES_SYS, json.dumps(payload, ensure_ascii=False))
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] 演讲备注生成失败：{e}")
+        return False
+    if not isinstance(data, dict):
+        print("  [LLM告警] 演讲备注结果不是 JSON 对象，已跳过")
+        return False
+    norm = {_norm_title(str(k)): v for k, v in data.items()}
+    for s in contents:
+        note = norm.get(_norm_title(s.get("title", "")))
+        if isinstance(note, str) and note.strip():
+            s["notes"] = f"{AI_MARK} {note.strip()}"
+    return True
+
+
+# ---------------------------------------------------------------------------
 #  无标题文档的语义分章
 # ---------------------------------------------------------------------------
 _CHAP_SYS = ("你是论文结构助手。把编号段落分配到给定的章节骨架中，"
@@ -349,4 +382,9 @@ def enhance(thesis: dict, deck: dict, docs: list):
         print("  [LLM] PPT 大纲重建完成")
     except Exception as e:  # noqa: BLE001
         print(f"  [LLM告警] PPT 大纲重建失败，保留规则结果：{e}")
+    try:
+        if add_speaker_notes(deck):
+            print("  [LLM] 演讲备注生成完成")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [LLM告警] 演讲备注失败：{e}")
     return thesis, deck
