@@ -60,10 +60,8 @@ def _chat(system: str, user: str, json_mode: bool = False) -> str:
     return resp.choices[0].message.content or ""
 
 
-def _chat_json(system: str, user: str):
-    """要求模型输出 JSON 并解析；容忍代码块包裹与前后废话。"""
-    text = _chat(system + "\n只输出 JSON，不要任何其它文字。", user,
-                 json_mode=True)
+def _parse_json(text: str):
+    """容忍代码块包裹与前后废话的 JSON 解析。供 _chat_json 与视觉模块复用。"""
     m = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if m:
         text = m.group(1)
@@ -72,6 +70,13 @@ def _chat_json(system: str, user: str):
         raise ValueError(f"LLM 未返回 JSON：{text[:80]!r}")
     obj, _ = json.JSONDecoder().raw_decode(text[min(starts):].strip())
     return obj
+
+
+def _chat_json(system: str, user: str):
+    """要求模型输出 JSON 并解析；容忍代码块包裹与前后废话。"""
+    text = _chat(system + "\n只输出 JSON，不要任何其它文字。", user,
+                 json_mode=True)
+    return _parse_json(text)
 
 
 # ---------------------------------------------------------------------------
