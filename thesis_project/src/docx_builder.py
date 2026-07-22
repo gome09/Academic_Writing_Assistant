@@ -12,6 +12,7 @@ Word 生成器 —— 按 WORD_SPEC 生成本科毕业论文草案 (.docx)。
   - 中文字体通过 w:eastAsia 正确设置（python-docx 默认只设置西文字体）
 """
 from __future__ import annotations
+import io
 import sys
 import os
 
@@ -21,6 +22,7 @@ from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.section import WD_SECTION
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
@@ -291,6 +293,7 @@ def build(thesis, out_path):
 
     # ---------- 正文章节 ----------
     for ci, ch in enumerate(thesis["chapters"], 1):
+        counters = {"table": 0, "figure": 0}
         h = doc.add_heading(level=1)
         run = h.add_run(f"第{_cn_num(ci)}章　{ch['title']}")
         _set_run_font(run, W["headings"][1]["font_cn"],
@@ -298,6 +301,7 @@ def build(thesis, out_path):
                       W["headings"][1]["size_pt"], True)
         for para in ch["paras"]:
             _add_para(doc, para, W["body"], indent_chars=2)
+        _render_media(doc, ch, ci, counters)
         for si, sub in enumerate(ch.get("subs", []), 1):
             h2 = doc.add_heading(level=2)
             run = h2.add_run(f"{ci}.{si}　{sub['title']}")
@@ -306,6 +310,7 @@ def build(thesis, out_path):
                           W["headings"][2]["size_pt"], True)
             for para in sub["paras"]:
                 _add_para(doc, para, W["body"], indent_chars=2)
+            _render_media(doc, sub, ci, counters)
             for ti, sub3 in enumerate(sub.get("subs", []), 1):
                 h3 = doc.add_heading(level=3)
                 run = h3.add_run(f"{ci}.{si}.{ti}　{sub3['title']}")
@@ -314,6 +319,7 @@ def build(thesis, out_path):
                               W["headings"][3]["size_pt"], True)
                 for para in sub3["paras"]:
                     _add_para(doc, para, W["body"], indent_chars=2)
+                _render_media(doc, sub3, ci, counters)
 
     # ---------- 参考文献 ----------
     _add_page_break(doc)
@@ -330,6 +336,99 @@ def build(thesis, out_path):
     _enable_update_fields(doc)
     doc.save(out_path)
     return out_path
+
+
+# ---------------------------------------------------------------------------
+#  图 / 表（三线表 + 题注编号 表1-1 / 图1-1）
+# ---------------------------------------------------------------------------
+_CAPTION_SPEC = {"font_cn": "宋体", "font_en": "Times New Roman",
+                 "size_pt": 10.5, "line_spacing_pt": 20}
+
+
+def _set_three_line_borders(tbl):
+    """三线表：顶线/底线 1.5 磅、表头下线 0.75 磅，其余无框线。"""
+    tblPr = tbl._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for tag, sz in (("top", "12"), ("bottom", "12")):
+        el = OxmlElement(f"w:{tag}")
+        el.set(qn("w:val"), "single")
+        el.set(qn("w:sz"), sz)
+        el.set(qn("w:color"), "000000")
+        borders.append(el)
+    for tag in ("left", "right", "insideH", "insideV"):
+        el = OxmlElement(f"w:{tag}")
+        el.set(qn("w:val"), "none")
+        borders.append(el)
+    # CT_TblPr 序列要求 tblBorders 位于 tblLayout/tblCellMar/tblLook 之前，
+    # 用锚点插入（同 _enable_update_fields 的做法）。
+    for tag in ("w:tblLayout", "w:tblCellMar", "w:tblLook"):
+        anchor = tblPr.find(qn(tag))
+        if anchor is not None:
+            anchor.addprevious(borders)
+            break
+    else:
+        tblPr.append(borders)
+    for tc in tbl.rows[0]._tr.findall(qn("w:tc")):
+        tcPr = tc.find(qn("w:tcPr"))
+        if tcPr is None:
+            tcPr = OxmlElement("w:tcPr")
+            tc.insert(0, tcPr)
+        tcB = OxmlElement("w:tcBorders")
+        bottom = OxmlElement("w:bottom")
+        bottom.set(qn("w:val"), "single")
+        bottom.set(qn("w:sz"), "6")
+        bottom.set(qn("w:color"), "000000")
+        tcB.append(bottom)
+        tcPr.append(tcB)
+
+
+def _add_three_line_table(doc, rows, ci, ti):
+    spec = W.get("table", {})
+    caption = f"{spec.get('prefix', '表')}{ci}-{ti}　<请填写表题>"
+    if spec.get("caption_position", "above") == "above":
+        _add_para(doc, caption, _CAPTION_SPEC,
+                  align=spec.get("caption_align", "center"))
+    n_cols = max(len(r) for r in rows)
+    tbl = doc.add_table(rows=len(rows), cols=n_cols)
+    tbl.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for r_i, row in enumerate(rows):
+        for c_i in range(n_cols):
+            cell = tbl.rows[r_i].cells[c_i]
+            cell.text = row[c_i] if c_i < len(row) else ""
+            for p in cell.paragraphs:
+                for run in p.runs:
+                    _set_run_font(run, "宋体", "Times New Roman", 10.5,
+                                  bold=(r_i == 0))
+    _set_three_line_borders(tbl)
+    if spec.get("caption_position", "above") != "above":
+        _add_para(doc, caption, _CAPTION_SPEC,
+                  align=spec.get("caption_align", "center"))
+
+
+def _add_image(doc, img, ci, fi):
+    spec = W.get("figure", {})
+    p = doc.add_paragraph()
+    p.alignment = _ALIGN["center"]
+    try:
+        p.add_run().add_picture(io.BytesIO(img["data"]), width=Cm(14))
+    except Exception:  # noqa: BLE001 损坏/不支持的图片格式
+        # 占位文字写入同一居中段落，仍输出题注以保持编号连续
+        run = p.add_run("<图片插入失败，请手工补图>")
+        _set_run_font(run, W["body"]["font_cn"], W["body"]["font_en"],
+                      W["body"]["size_pt"])
+    caption = f"{spec.get('prefix', '图')}{ci}-{fi}　<请填写图题>"
+    _add_para(doc, caption, _CAPTION_SPEC,
+              align=spec.get("caption_align", "center"))
+
+
+def _render_media(doc, node, ci, counters):
+    """渲染节点挂载的表格与图片；counters 按章累计编号。"""
+    for rows in node.get("tables", []):
+        counters["table"] += 1
+        _add_three_line_table(doc, rows, ci, counters["table"])
+    for img in node.get("images", []):
+        counters["figure"] += 1
+        _add_image(doc, img, ci, counters["figure"])
 
 
 def _cn_num(n):
