@@ -1,0 +1,8 @@
+﻿# 冒烟产物（手动跑 main.py 时生成，按计划 Task 8 步骤 5 不应提交）
+/_verify_media.py
+/_verify_media_result.txt
+/media_test/
+/media_test_out/
+/output_smoke/
+.pytest_cache/
+__pycache__/
