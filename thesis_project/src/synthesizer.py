@@ -305,3 +305,74 @@ def format_references(cards: list) -> list:
     except Exception as e:  # noqa: BLE001
         _note_degrade("参考文献格式化", e)
         return _raw_references(cards)
+
+
+# ---------------------------------------------------------------------------
+#  ⑥ 视觉理解 + 媒体挂载（纯规则挂载）
+# ---------------------------------------------------------------------------
+def describe_images(media_docs: list) -> list:
+    """截图 -> [{"source", "caption", "summary"}]；未配置视觉模型返回 []。"""
+    from src import llm_vision
+    if not llm_vision.is_vision_available():
+        return []
+    notes = []
+    for d in media_docs:
+        if d["type"] != "image":
+            continue
+        name = os.path.basename(d["source"])
+        b = d["blocks"][0]
+        try:
+            r = llm_vision.describe_image(b["data"], b.get("ext", ".png"))
+            notes.append({"source": name, "caption": r["caption"],
+                          "summary": r["summary"]})
+        except Exception as e:  # noqa: BLE001
+            _note_degrade(f"《{name}》视觉理解", e)
+    return notes
+
+
+def _match_chapter(chapters: list, filename: str):
+    """文件名（去扩展名）与章标题做双向子串匹配；命中最先出现的章。"""
+    stem = os.path.splitext(filename)[0]
+    for ch in chapters:
+        if ch.get("kind") == "review":
+            continue          # 综述章是文献内容，不挂作者自己的素材
+        if stem and (stem in ch["title"] or ch["title"] in stem or any(
+                len(seg) >= 2 and seg in ch["title"]
+                for seg in re.split(r"[\s_\-（）()]+", stem))):
+            return ch
+    return None
+
+
+def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
+    """xlsx/csv 表格与截图就地挂到语义匹配章；无匹配挂素材附录章。"""
+    notes_by_source = {n["source"]: n for n in img_notes}
+    materials = None
+
+    def target_for(filename):
+        nonlocal materials
+        ch = _match_chapter(chapters, filename)
+        if ch is not None:
+            return ch
+        if materials is None:
+            materials = _node(REFS_SPEC["materials_chapter"], 1)
+            materials["kind"] = "core"
+            chapters.append(materials)
+        return materials
+
+    for d in media_docs:
+        name = os.path.basename(d["source"])
+        ch = target_for(name)
+        for b in d["blocks"]:
+            if b["kind"] == "table":
+                ch["tables"].append(b["rows"])
+                ch["paras"].append(f"（下表数据来自：{name}，表题请补全）")
+            elif b["kind"] == "image":
+                ch["images"].append({"data": b.get("data"),
+                                     "ext": b.get("ext", ".png")})
+                note = notes_by_source.get(name)
+                if note:
+                    ch["paras"].append(
+                        f"（插图来自：{name}；图题建议：{note['caption']}；"
+                        f"内容摘要：{note['summary']} {AI_MARK}）")
+                else:
+                    ch["paras"].append(f"（插图来自：{name}，图题请补全）")
