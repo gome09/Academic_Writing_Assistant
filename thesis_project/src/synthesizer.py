@@ -126,3 +126,59 @@ def make_cards(ref_docs: list) -> list:
                           "quotes": [], "source": name,
                           "fallback_text": _doc_text(d, limit=500)})
     return cards
+
+
+# ---------------------------------------------------------------------------
+#  ② 论文大纲
+# ---------------------------------------------------------------------------
+_OUTLINE_SYS = (
+    "你是论文结构顾问。根据论文题目/研究方向与文献摘要卡，为一篇本科毕业论文"
+    "设计章节大纲（4~10章）。每章标注 kind："
+    "intro（绪论）、review（文献综述类，可由AI基于文献撰写）、"
+    "core（作者必须自己完成的研究/设计/实现/实验章）、conclusion（总结展望）。"
+    "cards 列出与该章相关的文献编号（从0开始）。")
+
+
+def _default_outline(n_cards: int) -> list:
+    """降级骨架：全部卡关联到每个综述章，保证素材不丢。"""
+    out = []
+    for spec_ch in REFS_SPEC["default_outline"]:
+        ch = dict(spec_ch)
+        ch["cards"] = list(range(n_cards)) if ch["kind"] == "review" else []
+        out.append(ch)
+    return out
+
+
+def build_outline(topic: dict, cards: list, img_notes: list) -> list:
+    """返回 [{"title", "kind", "cards": [卡编号]}]；失败/不合格退默认骨架。"""
+    card_lines = [f"[{i}] {c['title']}：{c.get('topic', '')}"
+                  for i, c in enumerate(cards)]
+    img_lines = [f"（图片素材）{n['caption']}：{n['summary']}"
+                 for n in img_notes if n.get("summary")]
+    try:
+        data = _chat_json(
+            _OUTLINE_SYS,
+            '请以 JSON 输出 {"chapters": [{"title": "...", '
+            '"kind": "intro|review|core|conclusion", "cards": [0]}]}。\n'
+            f"论文题目与研究方向：\n{topic['background'] or topic['title']}\n\n"
+            "文献摘要卡：\n" + "\n".join(card_lines + img_lines))
+        raw = data.get("chapters") if isinstance(data, dict) else None
+        if not isinstance(raw, list):
+            raise ValueError("大纲结果缺少 chapters 列表")
+        outline = []
+        for ch in raw:
+            if not isinstance(ch, dict):
+                continue
+            title = str(ch.get("title") or "").strip()
+            kind = str(ch.get("kind") or "").strip()
+            if not title or kind not in _VALID_KINDS:
+                continue
+            ids = sorted({i for i in (ch.get("cards") or [])
+                          if isinstance(i, int) and 0 <= i < len(cards)})
+            outline.append({"title": title, "kind": kind, "cards": ids})
+        if not 4 <= len(outline) <= 10:
+            raise ValueError(f"大纲章数不合理：{len(outline)}")
+        return outline
+    except Exception as e:  # noqa: BLE001
+        _note_degrade("大纲生成", e)
+        return _default_outline(len(cards))
