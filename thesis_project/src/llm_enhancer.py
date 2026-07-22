@@ -224,7 +224,7 @@ def rechapter(thesis: dict) -> None:
 
     章内保持原文顺序；LLM 未分配的段落留在"研究内容"；全部失败则不动。
     """
-    from src.organizer import PLACEHOLDER, DEFAULT_CHAPTERS
+    from src.organizer import PLACEHOLDER, DEFAULT_CHAPTERS, _strip_numbering
     if not thesis.get("auto_skeleton"):
         return
     src = next((c for c in thesis["chapters"] if c["title"] == "研究内容"), None)
@@ -238,10 +238,12 @@ def rechapter(thesis: dict) -> None:
         + '\n请以 JSON 输出 {"章节名": [段落编号, ...], ...}：\n\n' + numbered)
     if not isinstance(data, dict):
         return
+    norm_data = {_norm_title(_strip_numbering(str(k))): v
+                 for k, v in data.items()}
     used = set()
     assign = {}
     for name in DEFAULT_CHAPTERS:
-        idxs = sorted(i for i in data.get(name, [])
+        idxs = sorted(i for i in norm_data.get(_norm_title(name), [])
                       if isinstance(i, int) and 0 <= i < len(paras)
                       and i not in used)
         used.update(idxs)

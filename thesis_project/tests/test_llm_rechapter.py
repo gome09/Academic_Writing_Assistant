@@ -56,3 +56,16 @@ def test_rechapter_noop_when_llm_assigns_nothing(monkeypatch):
     by_title = {c["title"]: c for c in t["chapters"]}
     assert by_title["研究内容"]["paras"] == \
         ["A段背景。", "B段方法。", "C段其它。", "D段展望。"]
+
+
+def test_rechapter_normalizes_returned_keys(monkeypatch):
+    # LLM 返回的键带全角空格与编号前缀，仍应命中骨架章节
+    monkeypatch.setattr(llm_enhancer, "_chat_json",
+                        lambda s, u: {"1. 绪论　": [0], "总结与展望 ": [1]})
+    thesis = {"auto_skeleton": True,
+              "chapters": [{"title": "研究内容", "level": 1,
+                            "paras": ["第一段。", "第二段。"], "subs": []}]}
+    llm_enhancer.rechapter(thesis)
+    by_title = {c["title"]: c["paras"] for c in thesis["chapters"]}
+    assert by_title["绪论"] == ["第一段。"]
+    assert by_title["总结与展望"] == ["第二段。"]
