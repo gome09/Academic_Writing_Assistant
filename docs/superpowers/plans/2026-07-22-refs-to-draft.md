@@ -1,5 +1,13 @@
 # 参考资料 → 论文初稿（研究写作辅助）实施计划
 
+> **状态：✅ 已完成（2026-07-22）** —— 17 个任务全部实施并合并回 main（合并前 HEAD `20124ee`，共 18 个提交）。
+> 执行方式：subagent-driven development（每任务独立实现子代理 + 规格/质量双重审查），全程 TDD。
+> 测试：191 → **257 全部通过**（新增 12 个测试文件）。最终整体审查结论：Ready to merge。
+>
+> **实施中新增的计划外修复：** `42a266f` —— `synthesize()` 原按 `by_title` 字典派发核心章内容，LLM 大纲返回重复章标题时会导致前一节点空、后一节点内容加倍；改为 `zip(outline, chapters)` 位置索引并补回归测试（质量审查发现）。
+>
+> **验证清单遗留（需人工）：** 第 4 项（真实 API Key 的 refs 模式冒烟）与第 5 项（Windows 双击 run.bat 全程）离线环境无法执行，其余 1-3 项已验证通过。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 新增"参考资料模式"：`input\` 放题目文件 + 参考文献/Excel/截图时，LLM 生成带文献综述、大纲、写作要点与 GB/T 7714 参考文献表的 `论文草案.docx`（不写核心研究章节正文，不生成 PPT）。
@@ -36,7 +44,7 @@
 - Modify: `thesis_project/src/readers.py`（新增 `read_xlsx`，注册 `.xlsx`）
 - Test: `thesis_project/tests/test_readers_xlsx.py`（新建）
 
-- [ ] **Step 1: 安装依赖并写失败测试**
+- [x] **Step 1: 安装依赖并写失败测试**
 
 Run: `python -m pip install openpyxl`，并在 `requirements.txt` 追加一行 `openpyxl`。
 
@@ -89,12 +97,12 @@ def test_read_xlsx_registered_in_dispatch(tmp_path):
     assert readers.read_file(p)["type"] == "xlsx"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_xlsx.py -v`
 Expected: FAIL，`AttributeError: module 'src.readers' has no attribute 'read_xlsx'`
 
-- [ ] **Step 3: 实现 read_xlsx**
+- [x] **Step 3: 实现 read_xlsx**
 
 在 `readers.py` 的 `read_pdf` 之后、`_READERS` 之前插入：
 
@@ -132,12 +140,12 @@ def read_xlsx(path: str) -> dict:
 
 并在 `_READERS` 字典中加入 `".xlsx": read_xlsx,`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_readers_xlsx.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -151,7 +159,7 @@ git commit -m "feat(readers): read xlsx workbooks as table blocks via openpyxl"
 - Modify: `thesis_project/src/readers.py`
 - Test: `thesis_project/tests/test_readers_csv.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -188,12 +196,12 @@ def test_read_csv_registered(tmp_path):
     assert readers.read_file(str(p))["type"] == "csv"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_csv.py -v`
 Expected: FAIL，`has no attribute 'read_csv'`
 
-- [ ] **Step 3: 实现 read_csv**
+- [x] **Step 3: 实现 read_csv**
 
 在 `read_xlsx` 之后插入（复用 `_read_text` 的三段编码回退）：
 
@@ -216,12 +224,12 @@ def read_csv(path: str) -> dict:
 
 `_READERS` 加入 `".csv": read_csv,`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_readers_csv.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -235,7 +243,7 @@ git commit -m "feat(readers): read csv files as a single table block"
 - Modify: `thesis_project/src/readers.py`
 - Test: `thesis_project/tests/test_readers_image.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -274,12 +282,12 @@ def test_image_extensions_registered(tmp_path, ext):
     assert readers.read_file(str(p))["type"] == "image"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_image.py -v`
 Expected: FAIL，`has no attribute 'read_image'`
 
-- [ ] **Step 3: 实现 read_image**
+- [x] **Step 3: 实现 read_image**
 
 在 `read_csv` 之后插入：
 
@@ -309,12 +317,12 @@ def read_image(path: str) -> dict:
     ".webp": read_image,
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_readers_image.py -v`
 Expected: 7 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -330,7 +338,7 @@ git commit -m "feat(readers): import standalone images (png/jpg/jpeg/bmp/webp)"
 - Modify: `thesis_project/config/format_spec.py`（文件末尾追加）
 - Test: `thesis_project/tests/test_refs_spec.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -353,12 +361,12 @@ def test_default_outline_kinds_valid():
     assert "review" in kinds and "core" in kinds
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_refs_spec.py -v`
 Expected: FAIL，`ImportError: cannot import name 'REFS_SPEC'`
 
-- [ ] **Step 3: 在 format_spec.py 末尾追加**
+- [x] **Step 3: 在 format_spec.py 末尾追加**
 
 ```python
 # =============================================================================
@@ -388,12 +396,12 @@ REFS_SPEC = {
 }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_refs_spec.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -407,7 +415,7 @@ git commit -m "feat(config): add REFS_SPEC for reference-materials mode"
 - Modify: `thesis_project/src/llm_enhancer.py:63-74`（`_chat_json` 拆出解析函数）
 - Test: `thesis_project/tests/test_llm_parse_json.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -429,12 +437,12 @@ def test_parse_json_no_json_raises():
         llm_enhancer._parse_json("抱歉，我无法处理。")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_parse_json.py -v`
 Expected: FAIL，`has no attribute '_parse_json'`
 
-- [ ] **Step 3: 重构 _chat_json**
+- [x] **Step 3: 重构 _chat_json**
 
 把 `llm_enhancer.py` 的 `_chat_json`（63-74 行）改为：
 
@@ -460,12 +468,12 @@ def _chat_json(system: str, user: str):
 
 注意：`_chat_json` 的对外行为、打桩点（`llm_enhancer._chat`）完全不变。
 
-- [ ] **Step 4: 运行确认通过（含既有 LLM 测试回归）**
+- [x] **Step 4: 运行确认通过（含既有 LLM 测试回归）**
 
 Run: `python -m pytest tests/test_llm_parse_json.py tests/test_llm_base.py tests/test_llm_json_mode.py -v`
 Expected: 全 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -479,7 +487,7 @@ git commit -m "refactor(llm): extract _parse_json from _chat_json for reuse"
 - Create: `thesis_project/src/llm_vision.py`
 - Test: `thesis_project/tests/test_llm_vision.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -530,12 +538,12 @@ def test_describe_image_bad_json_raises(monkeypatch):
         llm_vision.describe_image(b"x", ".png")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_vision.py -v`
 Expected: FAIL，`ModuleNotFoundError: No module named 'src.llm_vision'`
 
-- [ ] **Step 3: 实现 llm_vision.py**
+- [x] **Step 3: 实现 llm_vision.py**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -604,12 +612,12 @@ def describe_image(data: bytes, ext: str) -> dict:
             "summary": str(obj.get("summary", "")).strip()}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_llm_vision.py -v`
 Expected: 5 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -629,7 +637,7 @@ git commit -m "feat(llm): add optional vision module for screenshot understandin
 - Create: `thesis_project/src/synthesizer.py`
 - Test: `thesis_project/tests/test_synth_topic.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -675,12 +683,12 @@ def test_parse_topic_defaults_placeholder():
     assert t["background"] == ""
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_topic.py -v`
 Expected: FAIL，`ModuleNotFoundError: No module named 'src.synthesizer'`
 
-- [ ] **Step 3: 创建 synthesizer.py 骨架**
+- [x] **Step 3: 创建 synthesizer.py 骨架**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -767,12 +775,12 @@ def parse_topic(topic_doc: dict) -> dict:
             "background": _doc_text(topic_doc, limit=4000)}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_topic.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -786,7 +794,7 @@ git commit -m "feat(synthesizer): module skeleton and topic-file parsing"
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_cards.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -838,12 +846,12 @@ def test_make_cards_normalizes_missing_fields(monkeypatch):
     assert card["year"] == "" and card["method"] == ""
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_cards.py -v`
 Expected: FAIL，`has no attribute 'make_cards'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -892,12 +900,12 @@ def make_cards(ref_docs: list) -> list:
     return cards
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_cards.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -911,7 +919,7 @@ git commit -m "feat(synthesizer): per-document literature cards with fallback"
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_outline.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -974,12 +982,12 @@ def test_build_outline_too_few_chapters_falls_back(monkeypatch):
         [c["title"] for c in REFS_SPEC["default_outline"]]
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_outline.py -v`
 Expected: FAIL，`has no attribute 'build_outline'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1038,12 +1046,12 @@ def build_outline(topic: dict, cards: list, img_notes: list) -> list:
         return _default_outline(len(cards))
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_outline.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1057,7 +1065,7 @@ git commit -m "feat(synthesizer): LLM outline with default-skeleton fallback"
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_review.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1106,12 +1114,12 @@ def test_write_review_failure_returns_material_fallback(monkeypatch, capsys):
     assert "综述" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_review.py -v`
 Expected: FAIL，`has no attribute 'write_review'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1166,12 +1174,12 @@ def write_review(ch: dict, topic: dict, cards: list) -> list:
         return _material_paras(ch, cards)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_review.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1185,7 +1193,7 @@ git commit -m "feat(synthesizer): AI-drafted review chapters with [n] citations"
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_points.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1219,12 +1227,12 @@ def test_write_points_skips_when_no_chapters():
     assert synthesizer.write_points([], TOPIC, CARDS) == {}
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_points.py -v`
 Expected: FAIL，`has no attribute 'write_points'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1262,12 +1270,12 @@ def write_points(chapters: list, topic: dict, cards: list) -> dict:
         return {}
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_points.py -v`
 Expected: 3 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1281,7 +1289,7 @@ git commit -m "feat(synthesizer): batched writing-point generation for core chap
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_refs_table.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1321,12 +1329,12 @@ def test_format_references_empty_cards():
     assert synthesizer.format_references([]) == []
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_refs_table.py -v`
 Expected: FAIL，`has no attribute 'format_references'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1365,12 +1373,12 @@ def format_references(cards: list) -> list:
         return _raw_references(cards)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_refs_table.py -v`
 Expected: 4 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1384,7 +1392,7 @@ git commit -m "feat(synthesizer): GB/T 7714 reference list with raw fallback"
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_media.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1465,12 +1473,12 @@ def test_attach_media_no_media_no_extra_chapter():
     assert len(chapters) == 1
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_media.py -v`
 Expected: FAIL，`has no attribute 'describe_images'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1544,12 +1552,12 @@ def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
                     ch["paras"].append(f"（插图来自：{name}，图题请补全）")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_media.py -v`
 Expected: 7 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1563,7 +1571,7 @@ git commit -m "feat(synthesizer): optional vision notes and rule-based media att
 - Modify: `thesis_project/src/synthesizer.py`（追加）
 - Test: `thesis_project/tests/test_synth_entry.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1656,12 +1664,12 @@ def test_synthesize_prints_degrade_summary(monkeypatch, capsys):
     assert "步降级" in out
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_synth_entry.py -v`
 Expected: FAIL，`has no attribute 'synthesize'`
 
-- [ ] **Step 3: 追加实现**
+- [x] **Step 3: 追加实现**
 
 ```python
 # ---------------------------------------------------------------------------
@@ -1722,12 +1730,12 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
     }
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_synth_entry.py -v`
 Expected: 2 PASS
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1743,7 +1751,7 @@ git commit -m "feat(synthesizer): assemble full thesis dict from reference mater
 - Modify: `thesis_project/src/main.py`
 - Test: `thesis_project/tests/test_main_refs_mode.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1802,12 +1810,12 @@ def test_refs_mode_checks_pass(monkeypatch):
     assert rc == 0
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_main_refs_mode.py -v`
 Expected: FAIL，`has no attribute '_split_topic'`
 
-- [ ] **Step 3: 修改 main.py**
+- [x] **Step 3: 修改 main.py**
 
 3a. 顶部 import 区（`from src import docx_builder, pptx_builder` 之后）加：
 
@@ -1895,12 +1903,12 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
     # draft 模式沿用原流程（docs 不剔除题目文件）
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_main_refs_mode.py -v`
 Expected: 7 PASS
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1913,7 +1921,7 @@ git commit -m "feat(main): auto-detect refs mode via topic file with --mode over
 **Files:**
 - Test: `thesis_project/tests/test_e2e_refs.py`（新建）
 
-- [ ] **Step 1: 写测试（直接可运行——底层均已实现，本任务是集成验证）**
+- [x] **Step 1: 写测试（直接可运行——底层均已实现，本任务是集成验证）**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1998,12 +2006,12 @@ def test_e2e_draft_mode_untouched(tmp_path, monkeypatch):
     assert (out / "答辩PPT草案.pptx").exists()
 ```
 
-- [ ] **Step 2: 运行确认通过**
+- [x] **Step 2: 运行确认通过**
 
 Run: `python -m pytest tests/test_e2e_refs.py -v`
 Expected: 2 PASS（若失败按报错修正前序任务的集成缝隙——这是本任务的目的）
 
-- [ ] **Step 3: 全量回归 + 提交**
+- [x] **Step 3: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -2018,7 +2026,7 @@ git commit -m "test(e2e): refs mode full pipeline with stubbed LLM"
 - Modify: `thesis_project/README.md`（新增"参考资料模式"章节）
 - Modify: `docs/superpowers/specs/2026-07-22-refs-to-draft-design.md`（llm_vision 偏差回写）
 
-- [ ] **Step 1: run.bat 依赖行更新**
+- [x] **Step 1: run.bat 依赖行更新**
 
 第 27 行改为：
 
@@ -2032,7 +2040,7 @@ git commit -m "test(e2e): refs mode full pipeline with stubbed LLM"
     %PY% -m pip install python-docx python-pptx pdfplumber openai openpyxl
 ```
 
-- [ ] **Step 2: README 更新**
+- [x] **Step 2: README 更新**
 
 在"LLM 增强（可选）"章节之后新增：
 
@@ -2061,14 +2069,14 @@ git commit -m "test(e2e): refs mode full pipeline with stubbed LLM"
 同时把 README 开头"读取你给出的 **Word / PDF / TXT / Markdown / JSON** 源文件"
 一句更新为"**Word / PDF / TXT / Markdown / JSON / Excel(xlsx·csv) / 图片**"。
 
-- [ ] **Step 3: spec 偏差回写**
+- [x] **Step 3: spec 偏差回写**
 
 编辑 `docs/superpowers/specs/2026-07-22-refs-to-draft-design.md` 第 3 节：
 把 `llm_client.py` 两处描述改为 `llm_vision.py`（仅承载视觉调用），并注明
 "文本调用继续经 `llm_enhancer._chat`（保持既有打桩链）；JSON 解析提为
 `_parse_json` 复用"。第 4 节"网络出口"与第 6 节回归说明同步措辞。
 
-- [ ] **Step 4: 真实冒烟（不打桩，需要真实 API Key；无 Key 则只验证报错路径）**
+- [x] **Step 4: 真实冒烟（不打桩，需要真实 API Key；无 Key 则只验证报错路径）**
 
 ```bash
 mkdir -p input_smoke && printf '# 基于X的Y系统\n\n研究内容测试。\n' > input_smoke/topic.md
@@ -2079,7 +2087,7 @@ python src/main.py --input input_smoke --output output_smoke; echo "exit=$?"
 rm -rf input_smoke output_smoke
 ```
 
-- [ ] **Step 5: 全量回归 + 提交**
+- [x] **Step 5: 全量回归 + 提交**
 
 ```bash
 python -m pytest tests/ -q
