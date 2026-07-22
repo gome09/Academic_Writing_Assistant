@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.readers import read_file, read_dir
 from src.organizer import organize
 from src import docx_builder, pptx_builder
+from config.format_spec import REFS_SPEC
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_INPUT = os.path.join(ROOT, "input")
@@ -79,12 +80,72 @@ def _build_with_retry(build_fn, data, out_path):
     return None
 
 
+def _split_topic(docs):
+    """按约定文件名拆出题目 Document；返回 (topic_doc|None, 其余docs)。"""
+    names = {n.lower() for n in REFS_SPEC["topic_filenames"]}
+    topic_doc, refs = None, []
+    for d in docs:
+        if topic_doc is None and os.path.basename(d["source"]).lower() in names:
+            topic_doc = d
+        else:
+            refs.append(d)
+    return topic_doc, refs
+
+
+def _run_refs_mode_checks(topic_doc, ref_docs) -> int:
+    """参考资料模式入口硬校验；通过返回 0，否则打印原因返回 1。"""
+    from src import llm_enhancer
+    if topic_doc is None:
+        print("[错误] 参考资料模式需要题目文件。请在 input/ 放置 "
+              "topic.md（或 题目.txt），写明论文题目与研究方向。")
+        return 1
+    if not llm_enhancer.is_available():
+        print("[错误] 参考资料模式需要 LLM。请设置环境变量后重试：\n"
+              "    set LLM_API_KEY=sk-...\n"
+              "    set LLM_BASE_URL=https://api.deepseek.com   （可选）\n"
+              "    set LLM_MODEL=deepseek-chat                 （可选）\n"
+              "  （PowerShell 用 $env:LLM_API_KEY=\"sk-...\"）")
+        return 1
+    if not ref_docs:
+        print("[错误] 未发现参考资料。请把文献（PDF/Word/md/txt/json）、"
+              "数据（xlsx/csv）或截图放入 input/。")
+        return 1
+    return 0
+
+
+def _run_refs_mode(args, topic_doc, ref_docs) -> int:
+    """参考资料模式主流程：综合 -> 仅生成 Word。"""
+    rc = _run_refs_mode_checks(topic_doc, ref_docs)
+    if rc:
+        return rc
+    from src import synthesizer
+    print("② 综合参考资料（LLM）")
+    thesis = synthesizer.synthesize(topic_doc, ref_docs)
+    print("③ 生成草案（参考资料模式只生成 Word，不生成 PPT）")
+    wp = os.path.join(args.output, "论文草案.docx")
+    wp = _build_with_retry(docx_builder.build, thesis, wp)
+    if not wp:
+        return 1
+    print(f"  ✔ Word: {wp}")
+    if args.refresh_fields or args.pdf:
+        from src import postprocess
+        postprocess.refresh_word_fields(wp, export_pdf=args.pdf)
+    print("=" * 56)
+    print("完成。综述正文带 <AI生成，请核对> 标记，请逐条核对文献后改写为"
+          "自己的表述；核心章节按【写作要点】撰写；检索 <请填写> 补全占位符。")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="论文Word草案 + 答辩PPT草案 生成器")
     ap.add_argument("--input", nargs="+", default=[DEFAULT_INPUT],
                     help="输入目录或文件（可多个）")
     ap.add_argument("--output", default=DEFAULT_OUTPUT, help="输出目录")
     ap.add_argument("--only", choices=["word", "ppt"], help="只生成其中一种")
+    ap.add_argument("--mode", choices=["auto", "refs", "draft"],
+                    default="auto",
+                    help="auto: input/ 有题目文件(topic.md等)时走参考资料模式；"
+                         "refs/draft 强制指定")
     ap.add_argument("--llm", action="store_true",
                     help="用 LLM 增强草案质量（需设置 LLM_API_KEY，"
                          "可选 LLM_BASE_URL / LLM_MODEL，OpenAI 兼容接口）")
@@ -105,6 +166,14 @@ def main():
         return 1
     print(f"  共读取 {len(docs)} 个文件，"
           f"{sum(len(d['blocks']) for d in docs)} 个内容块。")
+
+    topic_doc, ref_docs = _split_topic(docs)
+    mode = args.mode
+    if mode == "auto":
+        mode = "refs" if topic_doc is not None else "draft"
+    if mode == "refs":
+        return _run_refs_mode(args, topic_doc, ref_docs)
+    # draft 模式沿用原流程（docs 不剔除题目文件）
 
     print("② 整理内容结构")
     thesis, deck = organize(docs)
