@@ -80,3 +80,49 @@ def parse_topic(topic_doc: dict) -> dict:
     return {"title": title or PLACEHOLDER,
             "author": (meta.get("author") or "").strip() or PLACEHOLDER,
             "background": _doc_text(topic_doc, limit=4000)}
+
+
+# ---------------------------------------------------------------------------
+#  ① 文献摘要卡
+# ---------------------------------------------------------------------------
+_CARD_SYS = ("你是文献调研助手。阅读给定的单篇文献片段，抽取结构化信息。"
+             "只能从原文归纳，禁止编造；无法确定的字段输出空字符串或空列表。")
+
+
+def make_cards(ref_docs: list) -> list:
+    """逐篇 -> 摘要卡；单篇失败退化为文本卡，不影响其它篇。
+
+    卡片字段：title/authors/year/topic/method/conclusion/quotes/source；
+    退化卡额外带 fallback_text（原文截断），title 用文件名。
+    """
+    cards = []
+    for d in ref_docs:
+        name = os.path.basename(d["source"])
+        try:
+            data = _chat_json(
+                _CARD_SYS,
+                '请以 JSON 输出 {"title": "...", "authors": ["..."], '
+                '"year": "...", "topic": "一句话主题", "method": "...", '
+                '"conclusion": "...", "quotes": ["可直接引用的关键观点"]}：'
+                "\n\n" + _doc_text(d))
+            if not isinstance(data, dict):
+                raise ValueError("摘要卡结果不是 JSON 对象")
+            cards.append({
+                "title": str(data.get("title") or name).strip(),
+                "authors": [str(a).strip() for a in data.get("authors") or []
+                            if str(a).strip()],
+                "year": str(data.get("year") or "").strip(),
+                "topic": str(data.get("topic") or "").strip(),
+                "method": str(data.get("method") or "").strip(),
+                "conclusion": str(data.get("conclusion") or "").strip(),
+                "quotes": [str(q).strip() for q in data.get("quotes") or []
+                           if str(q).strip()],
+                "source": name,
+            })
+        except Exception as e:  # noqa: BLE001
+            _note_degrade(f"《{name}》摘要卡", e)
+            cards.append({"title": name, "authors": [], "year": "",
+                          "topic": "", "method": "", "conclusion": "",
+                          "quotes": [], "source": name,
+                          "fallback_text": _doc_text(d, limit=500)})
+    return cards
