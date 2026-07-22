@@ -204,3 +204,30 @@ SPEC_SOURCES = [
     ("艾思科蓝 论文答辩ppt应该注意什么", "https://www.ais.cn/news/featured/33657"),
     ("清新电源 毕业论文答辩PPT制作技巧", "http://www.sztspi.com/archives/25749.html"),
 ]
+
+
+# =============================================================================
+#  三、参考资料模式（研究写作辅助）
+# =============================================================================
+
+REFS_SPEC = {
+    # input/ 下存在这些文件名之一（不区分大小写）即触发参考资料模式
+    "topic_filenames": ["topic.md", "topic.txt", "题目.md", "题目.txt"],
+
+    # 大纲生成失败时的降级骨架；kind: intro|review|core|conclusion
+    # review 章由 LLM 撰写综述正文；其余章只给写作要点 + 占位符
+    "default_outline": [
+        {"title": "绪论", "kind": "intro"},
+        {"title": "相关理论与技术", "kind": "review"},
+        {"title": "国内外研究现状", "kind": "review"},
+        {"title": "研究内容与方案设计", "kind": "core"},
+        {"title": "系统实现与结果分析", "kind": "core"},
+        {"title": "总结与展望", "kind": "conclusion"},
+    ],
+
+    # 插在每个综述章开头的醒目提示
+    "review_notice": "本章由 AI 基于所给文献生成，请逐条核对原文后改写为自己的表述。",
+
+    # 无法按语义匹配到章节的表格/截图统一挂到这一章
+    "materials_chapter": "素材附录（整理用，定稿前删除）",
+}
