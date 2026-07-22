@@ -234,3 +234,38 @@ def write_review(ch: dict, topic: dict, cards: list) -> list:
     except Exception as e:  # noqa: BLE001
         _note_degrade(f"《{ch['title']}》综述", e)
         return _material_paras(ch, cards)
+
+
+# ---------------------------------------------------------------------------
+#  ④ 核心章写作要点（一次批量调用）
+# ---------------------------------------------------------------------------
+_POINTS_SYS = (
+    "你是论文写作教练。为每个章节生成写作要点：作者应当写什么内容、"
+    "按什么顺序展开、可参考哪些文献编号（如[1]）。"
+    "每章 3~6 条，每条不超过 60 字。只给指引，不代写正文。"
+    '只输出 JSON：{"章节标题": ["要点", ...], ...}')
+
+
+def write_points(chapters: list, topic: dict, cards: list) -> dict:
+    """非 review 章 -> {章节标题: [要点...]}；失败返回 {}（调用方留占位）。"""
+    if not chapters:
+        return {}
+    briefs = [_card_brief(i + 1, c) for i, c in enumerate(cards)]
+    payload = {"论文题目": topic["title"],
+               "章节": [ch["title"] for ch in chapters],
+               "文献摘要卡": briefs}
+    try:
+        data = _chat_json(_POINTS_SYS, json.dumps(payload, ensure_ascii=False))
+        if not isinstance(data, dict):
+            raise ValueError("写作要点结果不是 JSON 对象")
+        out = {}
+        for ch in chapters:
+            v = data.get(ch["title"])
+            if isinstance(v, list):
+                pts = [str(x).strip()[:60] for x in v if str(x).strip()]
+                if pts:
+                    out[ch["title"]] = pts[:6]
+        return out
+    except Exception as e:  # noqa: BLE001
+        _note_degrade("写作要点", e)
+        return {}
