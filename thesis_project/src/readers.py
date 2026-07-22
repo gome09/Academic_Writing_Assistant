@@ -412,6 +412,22 @@ def read_xlsx(path: str) -> dict:
     return {"source": path, "type": "xlsx", "blocks": blocks, "meta": {}}
 
 
+def read_csv(path: str) -> dict:
+    """整个 CSV -> 单个 table 块；全空行跳过。编码回退复用 _read_text。"""
+    import csv
+    import io
+    raw = _read_text(path)
+    rows = []
+    for row in csv.reader(io.StringIO(raw)):
+        cells = [_clean(c) for c in row]
+        if any(cells):
+            rows.append(cells)
+    if not rows:
+        raise RuntimeError("CSV 中没有任何非空行")
+    return {"source": path, "type": "csv",
+            "blocks": [_block("table", "", rows=rows)], "meta": {}}
+
+
 # ---------------------------------------------------------------------------
 #  分发
 # ---------------------------------------------------------------------------
@@ -424,6 +440,7 @@ _READERS = {
     ".docx": read_docx,
     ".pdf": read_pdf,
     ".xlsx": read_xlsx,
+    ".csv": read_csv,
 }
 
 
