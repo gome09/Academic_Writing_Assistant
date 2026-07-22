@@ -385,11 +385,12 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
     for key in ["background", "method", "result", "conclusion"]:
         group = buckets[key]
         if not group:
-            slides.append({"type": "section", "title": label[key]})
+            slides.append({"type": "section", "title": label[key],
+                           "bucket": key})
             slides.append({"type": "content", "title": label[key],
-                           "bullets": ["<待补充要点>"]})
+                           "bullets": ["<待补充要点>"], "bucket": key})
             continue
-        slides.append({"type": "section", "title": label[key]})
+        slides.append({"type": "section", "title": label[key], "bucket": key})
         for item in group:
             bullets = item["bullets"]
             chunks = [bullets[i:i + _MAX_BULLETS_PER_SLIDE]
@@ -397,7 +398,7 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
             for pi, chunk in enumerate(chunks):
                 title = item["title"] if pi == 0 else f"{item['title']}（续）"
                 slides.append({"type": "content", "title": title,
-                               "bullets": chunk})
+                               "bullets": chunk, "bucket": key})
 
     slides.append({"type": "thanks", "title": "致  谢",
                    "subtitle": "恳请各位老师批评指正"})

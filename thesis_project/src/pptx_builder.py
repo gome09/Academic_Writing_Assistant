@@ -215,13 +215,14 @@ def build(deck, out_path):
 
 
 def _check_structure(slides):
-    """按 PPT_SPEC["structure"] 校验可由 slide["type"] 直接判定的段落页数。
+    """按 PPT_SPEC["structure"] 校验各段页数。
 
-    仅校验 cover / outline / thanks 三项：background / method / result /
-    conclusion 四段在 deck 数据里没有直接标记（分段归属信息在 deck 中不保留，
-    只剩 section/content 类型），故 content 页总数不在此校验。
-    另外 outline 只校验上限：现有合法 deck（见 tests/test_pptx_page_count.py
-    的构造方式）允许省略目录页，缺失目录不作警告。
+    - cover / outline / thanks：按 slide["type"] 直接计数校验。
+      其中 outline 只校验上限：现有合法 deck（见 tests/test_pptx_page_count.py
+      的构造方式）允许省略目录页，缺失目录不作警告。
+    - background / method / result / conclusion 四段：content 页按
+      slide["bucket"] 归属计数，与规范 min/max 比较（section 分节页不计入）。
+      整份 deck 都不带 bucket 信息（旧格式/手工构造）时跳过该项校验。
     """
     checkable = {"cover", "outline", "thanks"}
     skip_min = {"outline"}
@@ -237,3 +238,22 @@ def _check_structure(slides):
             print(f"  [警告] PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。")
         elif n > seg["max"]:
             print(f"  [警告] PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。")
+
+    seg_by_key = {seg["key"]: seg for seg in P["structure"]}
+    bucket_counts = {}
+    for s in slides:
+        if s.get("type") == "content" and s.get("bucket"):
+            bucket_counts[s["bucket"]] = bucket_counts.get(s["bucket"], 0) + 1
+    if not bucket_counts:
+        return  # 旧格式/手工 deck 不带 bucket 信息，跳过分段页数校验
+    for key in ("background", "method", "result", "conclusion"):
+        seg = seg_by_key.get(key)
+        if seg is None:
+            continue
+        n = bucket_counts.get(key, 0)
+        if n < seg["min"]:
+            print(f"  [警告] PPT {seg['title']}内容页数 {n} "
+                  f"低于规范下限 {seg['min']}，请检查。")
+        elif n > seg["max"]:
+            print(f"  [警告] PPT {seg['title']}内容页数 {n} "
+                  f"高于规范上限 {seg['max']}，请检查。")
