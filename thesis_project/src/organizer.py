@@ -93,8 +93,15 @@ def _split_special_chapters(chapters):
         t = ch["title"].strip()
         if _REF_TITLE.match(t):
             paras = list(ch["paras"])
+            tables = list(ch.get("tables", []))
             for sub in ch.get("subs", []):
                 paras.extend(sub["paras"])
+                tables.extend(sub.get("tables", []))
+            # 条目也可能排在表格里：展平成行后按同样规则切分
+            for rows in tables:
+                text = _table_to_text({"rows": rows})
+                if text:
+                    paras.append(text)
             for para in paras:
                 for line in para.splitlines():
                     line = re.sub(r"^\[?\d+\]?[\.、]?\s*", "", line.strip())
@@ -105,13 +112,22 @@ def _split_special_chapters(chapters):
                 len(s.get("paras", []))
                 + sum(len(s3.get("paras", [])) for s3 in s.get("subs", []))
                 for s in ch.get("subs", []))
-            if n:
-                print(f"  [提示] 已从正文剔除章节《{ch['title']}》（{n} 段）"
-                      "——摘要/目录/致谢/附录不进入正文")
+            n_media = _count_media(ch) + sum(
+                _count_media(s)
+                + sum(_count_media(s3) for s3 in s.get("subs", []))
+                for s in ch.get("subs", []))
+            if n or n_media:
+                extra = f"、{n_media} 个表格/图片" if n_media else ""
+                print(f"  [提示] 已从正文剔除章节《{ch['title']}》"
+                      f"（{n} 段{extra}）——摘要/目录/致谢/附录不进入正文")
             continue
         else:
             body.append(ch)
     return body, references
+
+
+def _count_media(node):
+    return len(node.get("tables", [])) + len(node.get("images", []))
 
 
 # ---------------------------------------------------------------------------
@@ -180,8 +196,20 @@ def _extract_meta(docs):
 # ---------------------------------------------------------------------------
 #  重建章节树
 # ---------------------------------------------------------------------------
+def _node(title, level):
+    """章节树节点：章/节/条统一结构。"""
+    return {"title": title, "level": level, "paras": [], "subs": [],
+            "tables": [], "images": []}
+
+
+def _table_has_content(b):
+    """表格块至少有一个非空单元格才值得挂载。"""
+    rows = b.get("rows")
+    return bool(rows) and any(c.strip() for r in rows for c in r)
+
+
 def _build_chapters(docs):
-    """返回 [{title, level, paras:[...], subs:[...]}]，两层足够草案用。"""
+    """返回 [{title, level, paras:[...], subs:[...], tables:[...], images:[...]}]。"""
     blocks = [b for d in docs for b in d["blocks"]]
     has_heading = any(b["kind"] == "heading" for b in blocks)
 
@@ -190,58 +218,69 @@ def _build_chapters(docs):
         current_ch = None
         current_sub = None
         current_sub3 = None
+
+        def target_node():
+            t = current_sub3 or current_sub or current_ch
+            if t is not None:
+                return t
+            # 出现在任何标题之前的内容 -> 前言缓冲
+            if not chapters or chapters[0]["title"] != "前言":
+                chapters.insert(0, _node("前言", 1))
+            return chapters[0]
+
         for b in blocks:
             if b["kind"] == "heading" and b["level"] <= 1:
-                current_ch = {"title": _strip_numbering(b["text"]), "level": 1,
-                              "paras": [], "subs": []}
+                current_ch = _node(_strip_numbering(b["text"]), 1)
                 chapters.append(current_ch)
                 current_sub = None
                 current_sub3 = None
             elif b["kind"] == "heading" and b["level"] == 2:
                 if current_ch is None:
-                    current_ch = {"title": PLACEHOLDER, "level": 1, "paras": [], "subs": []}
+                    current_ch = _node(PLACEHOLDER, 1)
                     chapters.append(current_ch)
-                current_sub = {"title": _strip_numbering(b["text"]), "level": 2,
-                               "paras": [], "subs": []}
+                current_sub = _node(_strip_numbering(b["text"]), 2)
                 current_ch["subs"].append(current_sub)
                 current_sub3 = None
             elif b["kind"] == "heading":  # level >= 3
                 if current_sub is None:
                     # 无上级小节：提升为二级
                     if current_ch is None:
-                        current_ch = {"title": PLACEHOLDER, "level": 1,
-                                      "paras": [], "subs": []}
+                        current_ch = _node(PLACEHOLDER, 1)
                         chapters.append(current_ch)
-                    current_sub = {"title": _strip_numbering(b["text"]),
-                                   "level": 2, "paras": [], "subs": []}
+                    current_sub = _node(_strip_numbering(b["text"]), 2)
                     current_ch["subs"].append(current_sub)
                     current_sub3 = None
                 else:
-                    current_sub3 = {"title": _strip_numbering(b["text"]),
-                                    "level": 3, "paras": []}
+                    current_sub3 = _node(_strip_numbering(b["text"]), 3)
                     current_sub["subs"].append(current_sub3)
-            else:  # 正文/列表/代码/表格文本
-                text = b["text"] if b["kind"] != "table" else _table_to_text(b)
+            elif b["kind"] == "table":
+                if _table_has_content(b):
+                    target_node()["tables"].append(b["rows"])
+            elif b["kind"] == "image":
+                target_node()["images"].append(
+                    {"data": b.get("data"), "ext": b.get("ext", ".png")})
+            else:  # 正文/列表/代码
+                text = b["text"]
                 if not text:
                     continue
-                target = current_sub3 or current_sub or current_ch
-                if target is not None:
-                    target["paras"].append(text)
-                else:
-                    # 出现在任何标题之前的段落 -> 前言缓冲
-                    if not chapters or chapters[0]["title"] != "前言":
-                        chapters.insert(0, {"title": "前言", "level": 1,
-                                            "paras": [], "subs": []})
-                    chapters[0]["paras"].append(text)
+                target_node()["paras"].append(text)
     else:
-        # 无标题：套标准骨架并留占位符；全部段落按原文顺序放入
+        # 无标题：套标准骨架并留占位符；全部内容按原文顺序放入
         # "研究内容"一章，保持叙述连贯（LLM 增强层可再做语义分章）。
         for name in DEFAULT_CHAPTERS:
-            chapters.append({"title": name, "level": 1,
-                             "paras": [PLACEHOLDER], "subs": []})
-        paras = [b["text"] for b in blocks if b["text"]]
-        chapters.insert(3, {"title": "研究内容", "level": 1,
-                            "paras": paras, "subs": []})
+            ch = _node(name, 1)
+            ch["paras"].append(PLACEHOLDER)
+            chapters.append(ch)
+        body = _node("研究内容", 1)
+        for b in blocks:
+            if b["kind"] == "table" and _table_has_content(b):
+                body["tables"].append(b["rows"])
+            elif b["kind"] == "image":
+                body["images"].append(
+                    {"data": b.get("data"), "ext": b.get("ext", ".png")})
+            elif b["text"]:
+                body["paras"].append(b["text"])
+        chapters.insert(3, body)
 
     return chapters, not has_heading
 

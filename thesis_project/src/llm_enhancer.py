@@ -246,6 +246,17 @@ def rechapter(thesis: dict) -> None:
     if leftovers:
         new_chapters.insert(3, {"title": "研究内容", "level": 1,
                                 "paras": leftovers, "subs": []})
+    # 媒体不参与语义分配：统一挂到"研究内容"（无则最后一章）
+    tables = [t for c in thesis["chapters"] for t in c.get("tables", [])]
+    images = [im for c in thesis["chapters"] for im in c.get("images", [])]
+    for c in new_chapters:
+        c.setdefault("tables", [])
+        c.setdefault("images", [])
+    if tables or images:
+        carrier = next((c for c in new_chapters if c["title"] == "研究内容"),
+                       new_chapters[-1])
+        carrier["tables"].extend(tables)
+        carrier["images"].extend(images)
     thesis["chapters"] = new_chapters
 
 
