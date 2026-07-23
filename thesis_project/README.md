@@ -17,12 +17,21 @@
 thesis_project/
 ├── run.bat                # ★ 一键启动（Windows 双击即可）
 ├── config/
-│   └── format_spec.py     # 格式规范"硬标准"：字号/页边距/行距/标题层级/PPT结构
+│   ├── format_spec.py     # 格式规范"硬标准"：字号/页边距/行距/标题层级/PPT结构
+│   ├── template.py        # 外部 YAML 格式模板的加载与校验（--format-template）
+│   └── format_template.example.yml  # YAML 格式模板示例
 ├── src/
 │   ├── readers.py         # 多格式读取器 -> 统一中间结构
 │   ├── organizer.py       # 内容整理：重建章节树、映射 PPT 结构、提炼要点
 │   ├── docx_builder.py    # 按规范生成 .docx
 │   ├── pptx_builder.py    # 按规范生成 .pptx
+│   ├── synthesizer.py     # refs 模式：题目+文献 -> 综述/大纲/写作要点
+│   ├── references.py      # 参考文献元数据抽取 + GB/T 7714 著录 + 引用校验
+│   ├── llm_enhancer.py    # LLM 增强（可选，失败自动回退规则结果）
+│   ├── llm_vision.py      # 图片理解（可选，LLM_VISION_MODEL）
+│   ├── logging_setup.py   # 文件日志（output/运行日志.log）
+│   ├── runtime_report.py  # 运行报告（output/运行报告.json）
+│   ├── postprocess.py     # Word 域刷新 / PDF 导出（可选 win32com）
 │   └── main.py            # 主管道（命令行入口）
 ├── sample_input/          # 示例源文件（可直接试跑）
 ├── input/                 # 把你的源文件放这里
@@ -37,9 +46,11 @@ thesis_project/
 
 双击 **`run.bat`** 即可。它会自动：
 1. 定位 Python（优先 `py`，其次 `python`）；
-2. 缺依赖时自动 `pip install python-docx python-pptx pdfplumber`；
-3. `input\` 有文件就用 `input\`，为空则用 `sample_input\` 演示；
-4. 生成完成后自动打开 `output\` 目录。
+2. 首次运行创建隔离虚拟环境 `.venv` 并在其中执行；
+3. 缺核心依赖时自动 `pip install -r requirements.lock`；若设置了
+   `LLM_API_KEY`，再自动补装 `requirements-llm.lock`；
+4. `input\` 有文件就用 `input\`，为空则用 `sample_input\` 演示；
+5. 生成完成后自动打开 `output\` 目录。
 
 ### 方式二：命令行
 
@@ -63,10 +74,12 @@ python src/main.py --dry-run                   # 只检查输入与外发清单
 python src/main.py --llm --yes                 # 非交互环境确认 LLM 外发
 python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
+python src/main.py --report 报告.json           # 自定义运行报告输出路径
 ```
 
 > **Windows 提示**：请用 `python`（不要用 `python3`，它可能是应用商店占位程序）。
 > 脚本已自动把控制台切到 UTF-8，中文不会乱码。
+> 输出文件被 Word/WPS 打开占用时，会自动改存为 `论文草案(2).docx` 等（最多尝试 5 次）。
 
 依赖：`python-docx`、`python-pptx`、`pdfplumber`、`openpyxl`、`PyYAML`；
 `openai` 仅在 LLM 模式需要，`pywin32` 仅在 Word 域刷新/PDF 导出时需要。
@@ -101,6 +114,8 @@ pip install -r requirements-office.txt     # 可选：Word COM
 | `LLM_BASE_URL` | 否 | OpenAI 兼容端点，如 DeepSeek/通义/Kimi/本地 Ollama |
 | `LLM_MODEL` | 否 | 模型名，默认 `gpt-4o-mini` |
 | `LLM_TIMEOUT` | 否 | 单步超时秒数，默认 60 |
+| `LLM_VISION_MODEL` | 否 | 图片理解模型（如 qwen-vl-plus），refs 模式为截图生成图题与摘要 |
+| `THESIS_LLM_CONSENT` | 否 | 设为 `1` 等效 `--yes`，非交互环境自动同意 LLM 外发 |
 
 增强内容：元信息抽取（题目/作者/摘要/关键词）、英文摘要与关键词翻译、
 PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档的语义分章、
@@ -110,7 +125,8 @@ PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档�
 `<AI生成，请核对>` 标记；任一步失败自动回退纯规则结果，主流程不受影响。
 
 启用 LLM 时程序会先显示端点主机、文件数量、文本规模和图片数量。交互终端
-需确认后才发送；CI/脚本等非交互环境必须显式传 `--yes`。`--dry-run` 永不
+需确认后才发送；CI/脚本等非交互环境必须显式传 `--yes`（或设
+`THESIS_LLM_CONSENT=1`）。`--dry-run` 永不
 调用外部服务。原始资料会作为不可信输入包裹，LLM 输出仍会经过本地结构、
 长度和引用编号校验。运行详情写入 `output/运行报告.json`，警告日志写入
 `output/运行日志.log`。

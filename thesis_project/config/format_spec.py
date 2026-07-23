@@ -19,7 +19,7 @@ WORD_SPEC = {
     # ---- 页面 ----
     "page": {
         "size": "A4",              # 暂未落实（210mm x 297mm；页面尺寸在 docx_builder.py 硬编码）
-        "orientation": "portrait", # 暂未落实
+        "orientation": "portrait", # portrait | landscape
         "margin_top_cm": 2.5,
         "margin_bottom_cm": 2.5,
         "margin_left_cm": 2.5,     # 含装订线，靠左
@@ -152,8 +152,8 @@ PPT_SPEC = {
     # ---- 版面约束 ----
     "layout": {
         "max_bullets_per_slide": 6,    # 每页要点 <=6~8
-        "max_lines_per_bullet": 2,     # 暂未落实
-        "content_max_ratio": 0.66,     # 暂未落实（内容 <= 2/3 页面）
+        "max_lines_per_bullet": 2,     # 每条要点最多行数（超出会产生告警）
+        "content_max_ratio": 0.66,     # 内容 <= 2/3 页面
         "text_align": "left",          # 暂未落实（左对齐，避免居中难读）
         "background": "white",         # 暂未落实（白底利于表格/公式/数据）
     },

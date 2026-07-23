@@ -1987,7 +1987,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## 2026-07-23 验收补充
 
-- [x] 全量 pytest：265 项通过。
+- [x] 全量 pytest：264 项通过。
 - [x] `src/config` Ruff 检查与 Python 编译检查通过。
 - [x] 普通模式 CLI 生成 Word/PPT、`--dry-run`、YAML 模板加载均已冒烟。
 - [ ] 真实 LLM/Crossref、Windows 双击 `run.bat`、Word COM 域刷新仍需在目标环境人工验证。
