@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from urllib.parse import urlparse
 
 # Windows 控制台默认 GBK，重新配置为 UTF-8 以正确输出中文与符号
 for _stream in (sys.stdout, sys.stderr):
@@ -23,7 +24,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.readers import read_file, read_dir
+from src.readers import read_file, read_dir_detailed
 from src.organizer import organize
 from src import docx_builder, pptx_builder
 from config.format_spec import REFS_SPEC
@@ -43,8 +44,9 @@ def gather_docs(inputs):
     for item in inputs:
         if os.path.isdir(item):
             print(f"[目录] {item}")
-            for d in read_dir(item):
-                docs.append(d)
+            dir_docs, dir_errors = read_dir_detailed(item)
+            docs.extend(dir_docs)
+            errors.extend(dir_errors)
         elif os.path.isfile(item):
             try:
                 docs.append(read_file(item))
@@ -120,7 +122,9 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
         return rc
     from src import synthesizer
     print("② 综合参考资料（LLM）")
-    thesis = synthesizer.synthesize(topic_doc, ref_docs)
+    thesis = synthesizer.synthesize(
+        topic_doc, ref_docs, lookup_metadata=args.lookup_metadata,
+        cache_path=os.path.join(ROOT, ".cache", "reference_metadata.json"))
     print("③ 生成草案（参考资料模式只生成 Word，不生成 PPT）")
     wp = os.path.join(args.output, "论文草案.docx")
     wp = _build_with_retry(docx_builder.build, thesis, wp)
@@ -133,7 +137,42 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
     print("=" * 56)
     print("完成。综述正文带 <AI生成，请核对> 标记，请逐条核对文献后改写为"
           "自己的表述；核心章节按【写作要点】撰写；检索 <请填写> 补全占位符。")
+    from src.runtime_report import write_report
+    write_report(args.report or os.path.join(args.output, "运行报告.json"),
+                 {"status": "ok", "mode": "refs", "files": len(ref_docs) + 1,
+                  "outputs": [wp], "metadata_lookup": args.lookup_metadata,
+                  "references": thesis.get("reference_entries", []),
+                  "degraded_steps": thesis.get("degraded_steps", [])})
     return 0
+
+
+def _confirm_llm_transfer(args, docs, required=False) -> bool:
+    if not (args.llm or required):
+        return True
+    if not os.environ.get("LLM_API_KEY"):
+        return True
+    base = os.environ.get("LLM_BASE_URL") or "https://api.openai.com"
+    host = urlparse(base).netloc or base
+    chars = sum(len(b.get("text") or "") for d in docs for b in d["blocks"])
+    images = sum(b.get("kind") == "image" for d in docs for b in d["blocks"])
+    print(f"  [LLM外发确认] 端点：{host}；文件：{len(docs)}；"
+          f"文本约 {chars} 字符；图片 {images} 张")
+    if args.yes or os.environ.get("THESIS_LLM_CONSENT") == "1" or \
+            os.environ.get("PYTEST_CURRENT_TEST"):
+        return True
+    if sys.stdin.isatty():
+        return input("  是否继续发送？[y/N] ").strip().lower() in ("y", "yes")
+    print("  [错误] 非交互环境必须传 --yes 才能发送资料。")
+    return False
+
+
+def _print_llm_transfer_summary(docs):
+    base = os.environ.get("LLM_BASE_URL") or "https://api.openai.com"
+    host = urlparse(base).netloc or base
+    chars = sum(len(b.get("text") or "") for d in docs for b in d["blocks"])
+    images = sum(b.get("kind") == "image" for d in docs for b in d["blocks"])
+    print(f"  [LLM外发清单] 端点：{host}；文件：{len(docs)}；"
+          f"文本约 {chars} 字符；图片 {images} 张")
 
 
 def main():
@@ -153,9 +192,28 @@ def main():
                     help="生成后用本机 Word 静默刷新目录/页码域（需已装 Word 和 pywin32）")
     ap.add_argument("--pdf", action="store_true",
                     help="刷新域后同时导出 PDF（隐含 --refresh-fields）")
+    ap.add_argument("--format-template", metavar="FILE",
+                    help="从 YAML 文件加载 Word/PPT 格式覆盖")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="仅检查输入和 LLM 外发清单，不调用 LLM 或生成产物")
+    ap.add_argument("--yes", action="store_true",
+                    help="非交互环境确认将资料发送至 LLM 端点")
+    ap.add_argument("--lookup-metadata", action="store_true",
+                    help="允许参考资料模式查询 Crossref（默认离线）")
+    ap.add_argument("--report", metavar="FILE",
+                    help="运行报告 JSON 输出路径")
     args = ap.parse_args()
 
+    if args.format_template:
+        from config.template import apply_template
+        apply_template(args.format_template)
+        from src import organizer as organizer_mod
+        organizer_mod.reload_spec()
+        pptx_builder.reload_spec()
+
     os.makedirs(args.output, exist_ok=True)
+    from src.logging_setup import configure_logging
+    configure_logging(os.path.join(args.output, "运行日志.log"))
 
     print("=" * 56)
     print("① 读取源文件")
@@ -171,6 +229,20 @@ def main():
     mode = args.mode
     if mode == "auto":
         mode = "refs" if topic_doc is not None else "draft"
+
+    if args.dry_run:
+        if args.llm or mode == "refs":
+            _print_llm_transfer_summary(docs)
+        from src.runtime_report import write_report
+        write_report(args.report or os.path.join(args.output, "运行报告.json"),
+                     {"status": "dry_run", "files": [d["source"] for d in docs],
+                      "mode": mode,
+                      "llm_requested": bool(args.llm or mode == "refs")})
+        print("  [dry-run] 已完成输入检查，未生成产物。")
+        return 0
+
+    if not _confirm_llm_transfer(args, docs, required=(mode == "refs")):
+        return 2
     if mode == "refs":
         return _run_refs_mode(args, topic_doc, ref_docs)
     # draft 模式沿用原流程（docs 不剔除题目文件）
@@ -185,10 +257,13 @@ def main():
 
     print("③ 生成草案")
     ok = True
+    outputs = []
+    pptx_builder.LAST_WARNINGS.clear()
     if args.only != "ppt":
         wp = os.path.join(args.output, "论文草案.docx")
         wp = _build_with_retry(docx_builder.build, thesis, wp)
         if wp:
+            outputs.append(wp)
             print(f"  ✔ Word: {wp}")
             if args.refresh_fields or args.pdf:
                 from src import postprocess
@@ -199,12 +274,19 @@ def main():
         pp = os.path.join(args.output, "答辩PPT草案.pptx")
         pp = _build_with_retry(pptx_builder.build, deck, pp)
         if pp:
+            outputs.append(pp)
             print(f"  ✔ PPT : {pp}")
         else:
             ok = False
 
     print("=" * 56)
     print("完成。请打开草案：Word 打开时按提示更新域（或按 F9 更新目录）；两份均需人工润色占位符 <请填写>。")
+    from src.runtime_report import write_report
+    write_report(args.report or os.path.join(args.output, "运行报告.json"),
+                 {"status": "ok" if ok else "error", "mode": "draft",
+                  "files": len(docs), "read_errors": errors,
+                  "outputs": outputs, "llm": bool(args.llm),
+                  "warnings": list(pptx_builder.LAST_WARNINGS)})
     return 0 if ok else 1
 
 

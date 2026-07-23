@@ -473,9 +473,10 @@ def read_file(path: str) -> dict:
     return reader(path)
 
 
-def read_dir(dir_path: str) -> list:
-    """读取目录下所有支持的文件，返回 Document 列表（跳过失败项并打印告警）。"""
+def read_dir_detailed(dir_path: str):
+    """Return (documents, errors) while keeping per-file failure details."""
     docs = []
+    errors = []
     for name in sorted(os.listdir(dir_path)):
         full = os.path.join(dir_path, name)
         if not os.path.isfile(full):
@@ -487,4 +488,11 @@ def read_dir(dir_path: str) -> list:
             print(f"  [读取] {name}")
         except Exception as e:  # noqa: BLE001
             print(f"  [跳过] {name}: {e}")
+            errors.append((full, str(e)))
+    return docs, errors
+
+
+def read_dir(dir_path: str) -> list:
+    """Backward-compatible directory reader returning only documents."""
+    docs, _ = read_dir_detailed(dir_path)
     return docs

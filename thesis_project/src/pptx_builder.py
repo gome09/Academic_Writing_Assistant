@@ -11,13 +11,16 @@ PPT 生成器 —— 按 PPT_SPEC 生成答辩演示草案 (.pptx)。
   - 中文字体：微软雅黑（含 eastAsia 设置）
 """
 from __future__ import annotations
+import io
+import math
 import sys
 import os
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
+from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.oxml.ns import qn
@@ -30,6 +33,8 @@ ACCENT = RGBColor(*_C["accent_rgb"])
 TEXT = RGBColor(*_C["text_rgb"])
 MUTED = RGBColor(*_C["muted_rgb"])
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+LAST_WARNINGS = []
+_LOGGER = None
 
 CN_FONT = P["font"]["family_cn"]
 EN_FONT = P["font"]["family_en"]
@@ -38,7 +43,24 @@ W_IN = P["slide"]["width_inch"]
 H_IN = P["slide"]["height_inch"]
 
 
-def _set_font(run, size_pt, color=TEXT, bold=False, cn=CN_FONT):
+def reload_spec():
+    """Refresh cached presentation constants after applying a YAML template."""
+    global _C, PRIMARY, ACCENT, TEXT, MUTED, CN_FONT, EN_FONT, SZ, W_IN, H_IN
+    _C = P["theme"]
+    PRIMARY = RGBColor(*_C["primary_rgb"])
+    ACCENT = RGBColor(*_C["accent_rgb"])
+    TEXT = RGBColor(*_C["text_rgb"])
+    MUTED = RGBColor(*_C["muted_rgb"])
+    CN_FONT = P["font"]["family_cn"]
+    EN_FONT = P["font"]["family_en"]
+    SZ = P["sizes"]
+    W_IN = P["slide"]["width_inch"]
+    H_IN = P["slide"]["height_inch"]
+
+
+def _set_font(run, size_pt, color=None, bold=False, cn=None):
+    color = color or TEXT
+    cn = cn or CN_FONT
     run.font.size = Pt(size_pt)
     run.font.bold = bold
     run.font.color.rgb = color
@@ -60,6 +82,13 @@ def _fill(shape, color):
     shape.fill.solid()
     shape.fill.fore_color.rgb = color
     shape.line.fill.background()
+
+
+def _warn(message):
+    LAST_WARNINGS.append(message)
+    if _LOGGER is not None:
+        _LOGGER.warning(message)
+    print(f"  [警告] {message}")
 
 
 def _textbox(slide, left, top, width, height, anchor=MSO_ANCHOR.TOP):
@@ -140,15 +169,59 @@ def _slide_section(prs, s):
 def _slide_content(prs, s):
     slide = _blank(prs)
     _title_bar(slide, s["title"])
-    tf = _textbox(slide, 1.0, 1.8, W_IN - 2.0, H_IN - 2.6)
+    media = s.get("media") or []
+    has_media = bool(media)
+    max_content = W_IN * P["layout"].get("content_max_ratio", 0.66)
+    text_width = 6.0 if has_media else min(W_IN - 2.0, max_content)
+    tf = _textbox(slide, 1.0, 1.8, text_width, H_IN - 2.6)
     bullets = s["bullets"][:P["layout"]["max_bullets_per_slide"]]
     for i, b in enumerate(bullets):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
-        p.alignment = PP_ALIGN.LEFT
+        align = P["layout"].get("text_align", "left")
+        p.alignment = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER,
+                       "right": PP_ALIGN.RIGHT}.get(align, PP_ALIGN.LEFT)
         p.space_after = Pt(12)
         r = p.add_run(); r.text = "▪  " + b
         _set_font(r, SZ["body_pt"], TEXT)
+    if has_media:
+        _render_media(slide, media[0], 7.2, 1.9, 5.4, 4.8)
     return slide
+
+
+def _render_media(slide, media, left, top, width, height):
+    """Render the first media block using deterministic, bounded layouts."""
+    if media.get("kind") == "image" and media.get("data"):
+        try:
+            slide.shapes.add_picture(io.BytesIO(media["data"]),
+                                     Inches(left), Inches(top),
+                                     width=Inches(width), height=Inches(height))
+        except Exception as exc:  # noqa: BLE001
+            _warn(f"PPT 图片插入失败：{exc}")
+            tf = _textbox(slide, left, top + height / 2 - 0.2, width, 0.5)
+            p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+            r = p.add_run(); r.text = "<图片插入失败>"
+            _set_font(r, SZ["caption_pt"], MUTED)
+        return
+    if media.get("kind") != "table":
+        return
+    rows = media.get("rows") or []
+    if not rows:
+        return
+    rows = rows[:8]
+    n_cols = min(max(len(r) for r in rows), 6)
+    shape = slide.shapes.add_table(len(rows), n_cols, Inches(left), Inches(top),
+                                   Inches(width), Inches(height))
+    table = shape.table
+    for ri, row in enumerate(rows):
+        for ci in range(n_cols):
+            cell = table.cell(ri, ci)
+            cell.text = str(row[ci]) if ci < len(row) else ""
+            for p in cell.text_frame.paragraphs:
+                for run in p.runs:
+                    _set_font(run, 12, WHITE if ri == 0 else TEXT,
+                              bold=(ri == 0))
+            if ri == 0:
+                cell.fill.solid(); cell.fill.fore_color.rgb = PRIMARY
 
 
 def _slide_thanks(prs, s):
@@ -188,6 +261,14 @@ _DISPATCH = {
 
 
 def build(deck, out_path):
+    global _LOGGER
+    try:
+        import logging
+        _LOGGER = logging.getLogger("thesis_project")
+    except Exception:  # pragma: no cover - logging is part of stdlib
+        _LOGGER = None
+    reload_spec()
+    LAST_WARNINGS.clear()
     prs = Presentation()
     prs.slide_width = Inches(W_IN)
     prs.slide_height = Inches(H_IN)
@@ -206,10 +287,12 @@ def build(deck, out_path):
     p_min = P["principle"]["total_slides_min"]
     p_max = P["principle"]["total_slides_max"]
     if total < p_min:
-        print(f"  [警告] PPT 总页数 {total} 低于规范下限 {p_min}，请检查。")
+        _warn(f"PPT 总页数 {total} 低于规范下限 {p_min}，请检查。")
     elif total > p_max:
-        print(f"  [警告] PPT 总页数 {total} 高于规范上限 {p_max}，请检查。")
+        _warn(f"PPT 总页数 {total} 高于规范上限 {p_max}，请检查。")
     _check_structure(slides)
+    _check_content_limits(slides)
+    _check_shape_bounds(prs)
     prs.save(out_path)
     return out_path
 
@@ -235,9 +318,9 @@ def _check_structure(slides):
             continue
         n = counts.get(key, 0)
         if n < seg["min"] and key not in skip_min:
-            print(f"  [警告] PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。")
+            _warn(f"PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。")
         elif n > seg["max"]:
-            print(f"  [警告] PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。")
+            _warn(f"PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。")
 
     seg_by_key = {seg["key"]: seg for seg in P["structure"]}
     bucket_counts = {}
@@ -252,8 +335,42 @@ def _check_structure(slides):
             continue
         n = bucket_counts.get(key, 0)
         if n < seg["min"]:
-            print(f"  [警告] PPT {seg['title']}内容页数 {n} "
+            _warn(f"PPT {seg['title']}内容页数 {n} "
                   f"低于规范下限 {seg['min']}，请检查。")
         elif n > seg["max"]:
-            print(f"  [警告] PPT {seg['title']}内容页数 {n} "
+            _warn(f"PPT {seg['title']}内容页数 {n} "
                   f"高于规范上限 {seg['max']}，请检查。")
+
+
+def _display_width(text):
+    return sum(2 if unicodedata.east_asian_width(ch) in "WFA" else 1
+               for ch in str(text))
+
+
+def _check_content_limits(slides):
+    """Warn about content that cannot satisfy configured line/table limits."""
+    max_lines = P["layout"].get("max_lines_per_bullet", 2)
+    for idx, slide in enumerate(slides, 1):
+        if slide.get("type") != "content":
+            continue
+        chars_per_line = 26 if slide.get("media") else 44
+        for bullet in slide.get("bullets", []):
+            if math.ceil(_display_width(bullet) / chars_per_line) > max_lines:
+                _warn(f"PPT 第 {idx} 页要点可能超过 {max_lines} 行："
+                      f"{str(bullet)[:30]}")
+        for media in slide.get("media", []):
+            if media.get("kind") == "table":
+                cols = max((len(r) for r in media.get("rows") or []), default=0)
+                if cols > 6:
+                    _warn(f"PPT 第 {idx} 页表格有 {cols} 列，"
+                          "PPT 仅展示前 6 列，请在 Word 中查看完整表格。")
+
+
+def _check_shape_bounds(prs):
+    for idx, slide in enumerate(prs.slides, 1):
+        for shape in slide.shapes:
+            if (shape.left < 0 or shape.top < 0 or
+                    shape.left + shape.width > prs.slide_width or
+                    shape.top + shape.height > prs.slide_height):
+                _warn(f"PPT 第 {idx} 页存在越界元素："
+                      f"{getattr(shape, 'name', 'shape')}")

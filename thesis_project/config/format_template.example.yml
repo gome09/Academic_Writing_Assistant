@@ -1,0 +1,23 @@
+word:
+  page:
+    size: A4
+    orientation: portrait
+    margin_top_cm: 2.5
+    margin_bottom_cm: 2.5
+    margin_left_cm: 2.5
+    margin_right_cm: 2.5
+  body:
+    font_cn: 宋体
+    font_en: Times New Roman
+    size_pt: 12
+ppt:
+  sizes:
+    cover_title_pt: 40
+    section_title_pt: 32
+    slide_title_pt: 30
+    body_pt: 24
+    caption_pt: 16
+  layout:
+    max_bullets_per_slide: 6
+    max_lines_per_bullet: 2
+    content_max_ratio: 0.66

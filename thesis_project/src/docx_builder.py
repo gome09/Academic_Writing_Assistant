@@ -13,6 +13,7 @@ Word 生成器 —— 按 WORD_SPEC 生成本科毕业论文草案 (.docx)。
 """
 from __future__ import annotations
 import io
+import re
 import sys
 import os
 
@@ -21,13 +22,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.enum.section import WD_SECTION
+from docx.enum.section import WD_SECTION, WD_ORIENT
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 from config.format_spec import WORD_SPEC as W
-from src.organizer import PLACEHOLDER
+from src.organizer import PLACEHOLDER, iter_node_blocks
 
 _ALIGN = {
     "center": WD_ALIGN_PARAGRAPH.CENTER,
@@ -70,8 +71,12 @@ def _set_line_spacing(pf, spec):
 def _setup_page(doc):
     sec = doc.sections[0]
     p = W["page"]
-    sec.page_height = Cm(29.7)
-    sec.page_width = Cm(21.0)
+    if p.get("size", "A4").upper() != "A4":
+        raise ValueError("当前仅支持 A4 页面尺寸")
+    landscape = p.get("orientation", "portrait") == "landscape"
+    sec.orientation = WD_ORIENT.LANDSCAPE if landscape else WD_ORIENT.PORTRAIT
+    sec.page_height = Cm(21.0 if landscape else 29.7)
+    sec.page_width = Cm(29.7 if landscape else 21.0)
     sec.top_margin = Cm(p["margin_top_cm"])
     sec.bottom_margin = Cm(p["margin_bottom_cm"])
     sec.left_margin = Cm(p["margin_left_cm"])
@@ -146,10 +151,10 @@ def _add_page_break(doc):
 # ---------------------------------------------------------------------------
 def _add_toc(doc):
     t = W["toc"]
-    title = _add_para(doc, t["title"],
-                      {"font_cn": "黑体", "font_en": "Times New Roman",
-                       "size_pt": 16, "bold": True, "line_spacing_pt": 20},
-                      align="center", space_after=12)
+    _add_para(doc, t["title"],
+              {"font_cn": "黑体", "font_en": "Times New Roman",
+               "size_pt": 16, "bold": True, "line_spacing_pt": 20},
+              align="center", space_after=12)
     p = doc.add_paragraph()
     run = p.add_run()
     fldBegin = OxmlElement("w:fldChar"); fldBegin.set(qn("w:fldCharType"), "begin")
@@ -292,34 +297,30 @@ def build(thesis, out_path):
     doc.add_section(WD_SECTION.NEW_PAGE)
 
     # ---------- 正文章节 ----------
-    for ci, ch in enumerate(thesis["chapters"], 1):
+    body_chapters = [c for c in thesis["chapters"]
+                     if c.get("section_role", "body") != "appendix"]
+    for ci, ch in enumerate(body_chapters, 1):
         counters = {"table": 0, "figure": 0}
         h = doc.add_heading(level=1)
         run = h.add_run(f"第{_cn_num(ci)}章　{ch['title']}")
         _set_run_font(run, W["headings"][1]["font_cn"],
                       W["headings"][1]["font_en"],
                       W["headings"][1]["size_pt"], True)
-        for para in ch["paras"]:
-            _add_para(doc, para, W["body"], indent_chars=2)
-        _render_media(doc, ch, ci, counters)
+        _render_content(doc, ch, ci, counters)
         for si, sub in enumerate(ch.get("subs", []), 1):
             h2 = doc.add_heading(level=2)
             run = h2.add_run(f"{ci}.{si}　{sub['title']}")
             _set_run_font(run, W["headings"][2]["font_cn"],
                           W["headings"][2]["font_en"],
                           W["headings"][2]["size_pt"], True)
-            for para in sub["paras"]:
-                _add_para(doc, para, W["body"], indent_chars=2)
-            _render_media(doc, sub, ci, counters)
+            _render_content(doc, sub, ci, counters)
             for ti, sub3 in enumerate(sub.get("subs", []), 1):
                 h3 = doc.add_heading(level=3)
                 run = h3.add_run(f"{ci}.{si}.{ti}　{sub3['title']}")
                 _set_run_font(run, W["headings"][3]["font_cn"],
                               W["headings"][3]["font_en"],
                               W["headings"][3]["size_pt"], True)
-                for para in sub3["paras"]:
-                    _add_para(doc, para, W["body"], indent_chars=2)
-                _render_media(doc, sub3, ci, counters)
+                _render_content(doc, sub3, ci, counters)
 
     # ---------- 参考文献 ----------
     _add_page_break(doc)
@@ -330,7 +331,24 @@ def build(thesis, out_path):
     for i, ref in enumerate(thesis["references"], 1):
         _add_para(doc, f"[{i}] {ref}",
                   {"font_cn": "宋体", "font_en": "Times New Roman",
-                   "size_pt": 10.5, "line_spacing_pt": 20})
+                  "size_pt": 10.5, "line_spacing_pt": 20})
+
+    # ---------- 附录 ----------
+    appendix_index = 0
+    for ch in thesis["chapters"]:
+        if ch.get("section_role") != "appendix":
+            continue
+        appendix_index += 1
+        h = doc.add_heading(level=1)
+        label = chr(ord("A") + appendix_index - 1)
+        title = re.sub(r"^附录\s*[A-Z一二三四五六七八九十]*\s*", "",
+                       ch["title"]).strip() or "附录"
+        run = h.add_run(f"附录{label}　{title}")
+        _set_run_font(run, W["headings"][1]["font_cn"],
+                      W["headings"][1]["font_en"],
+                      W["headings"][1]["size_pt"], True)
+        counters = {"table": 0, "figure": 0}
+        _render_content(doc, ch, appendix_index, counters)
 
     _setup_page_numbers(doc)
     _enable_update_fields(doc)
@@ -421,14 +439,24 @@ def _add_image(doc, img, ci, fi):
               align=spec.get("caption_align", "center"))
 
 
+def _render_content(doc, node, ci, counters):
+    """按原始顺序渲染正文与媒体；兼容旧 paras/tables/images 节点。"""
+    for block in iter_node_blocks(node):
+        kind = block.get("kind")
+        if kind == "table":
+            counters["table"] += 1
+            _add_three_line_table(doc, block.get("rows") or [],
+                                  ci, counters["table"])
+        elif kind == "image":
+            counters["figure"] += 1
+            _add_image(doc, block, ci, counters["figure"])
+        elif block.get("text"):
+            _add_para(doc, block["text"], W["body"], indent_chars=2)
+
+
 def _render_media(doc, node, ci, counters):
-    """渲染节点挂载的表格与图片；counters 按章累计编号。"""
-    for rows in node.get("tables", []):
-        counters["table"] += 1
-        _add_three_line_table(doc, rows, ci, counters["table"])
-    for img in node.get("images", []):
-        counters["figure"] += 1
-        _add_image(doc, img, ci, counters["figure"])
+    """Backward-compatible alias for callers using the old helper."""
+    _render_content(doc, node, ci, counters)
 
 
 def _cn_num(n):

@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 import ast
+import os
 import re
 
 from config.format_spec import PPT_SPEC
@@ -21,6 +22,11 @@ from config.format_spec import PPT_SPEC
 PLACEHOLDER = "<请填写>"
 
 _MAX_BULLETS_PER_SLIDE = PPT_SPEC["layout"]["max_bullets_per_slide"]
+
+
+def reload_spec():
+    global _MAX_BULLETS_PER_SLIDE
+    _MAX_BULLETS_PER_SLIDE = PPT_SPEC["layout"]["max_bullets_per_slide"]
 
 # 本科论文标准章节骨架（识别不到标题时使用）
 DEFAULT_CHAPTERS = [
@@ -83,7 +89,7 @@ _DROP_TITLE = re.compile(r"^(摘\s*要|abstract|目\s*录|致\s*谢|谢\s*辞|�
                          re.IGNORECASE)
 
 
-def _split_special_chapters(chapters):
+def _split_special_chapters(chapters, keep_appendix=False):
     """参考文献章 -> 抽成条目列表；摘要/目录/致谢/附录章 -> 移出正文。
 
     摘要正文已由 _extract_meta 抽取，这里剔除只是防止正文重复成章。
@@ -91,6 +97,10 @@ def _split_special_chapters(chapters):
     body, references = [], []
     for ch in chapters:
         t = ch["title"].strip()
+        if keep_appendix and t.startswith("附录"):
+            ch["section_role"] = "appendix"
+            body.append(ch)
+            continue
         if _REF_TITLE.match(t):
             paras = list(ch["paras"])
             tables = list(ch.get("tables", []))
@@ -107,7 +117,7 @@ def _split_special_chapters(chapters):
                     line = re.sub(r"^\[?\d+\]?[\.、]?\s*", "", line.strip())
                     if line:
                         references.append(line)
-        elif _DROP_TITLE.match(t):
+        elif _DROP_TITLE.match(t) and not (keep_appendix and t.startswith("附录")):
             n = len(ch.get("paras", [])) + sum(
                 len(s.get("paras", []))
                 + sum(len(s3.get("paras", [])) for s3 in s.get("subs", []))
@@ -199,7 +209,48 @@ def _extract_meta(docs):
 def _node(title, level):
     """章节树节点：章/节/条统一结构。"""
     return {"title": title, "level": level, "paras": [], "subs": [],
-            "tables": [], "images": []}
+            "tables": [], "images": [], "blocks": [], "section_role": "body"}
+
+
+def _append_block(node, block, source="", source_index=None):
+    """Append a canonical ordered content block and maintain legacy views."""
+    kind = block.get("kind")
+    if kind == "table" and not _table_has_content(block):
+        return
+    if kind not in {"paragraph", "list_item", "code", "table", "image"}:
+        return
+    item = {"kind": kind, "source": source,
+            "source_index": source_index}
+    if kind == "table":
+        item["rows"] = block.get("rows") or []
+        node["tables"].append(item["rows"])
+    elif kind == "image":
+        item["data"] = block.get("data")
+        item["ext"] = block.get("ext", ".png")
+        node["images"].append({"data": item["data"], "ext": item["ext"],
+                                "source": source, "source_index": source_index})
+    else:
+        text = block.get("text", "")
+        if not text:
+            return
+        item["text"] = text
+        node["paras"].append(text)
+    node["blocks"].append(item)
+
+
+def iter_node_blocks(node):
+    """Yield ordered blocks; accept legacy hand-built nodes without blocks."""
+    blocks = node.get("blocks")
+    if blocks:
+        return list(blocks)
+    out = []
+    for text in node.get("paras", []):
+        out.append({"kind": "paragraph", "text": text})
+    for rows in node.get("tables", []):
+        out.append({"kind": "table", "rows": rows})
+    for image in node.get("images", []):
+        out.append({"kind": "image", **image})
+    return out
 
 
 def _table_has_content(b):
@@ -228,42 +279,54 @@ def _build_chapters(docs):
                 chapters.insert(0, _node("前言", 1))
             return chapters[0]
 
-        for b in blocks:
-            if b["kind"] == "heading" and b["level"] <= 1:
-                current_ch = _node(_strip_numbering(b["text"]), 1)
-                chapters.append(current_ch)
-                current_sub = None
-                current_sub3 = None
-            elif b["kind"] == "heading" and b["level"] == 2:
-                if current_ch is None:
-                    current_ch = _node(PLACEHOLDER, 1)
+        source_index = 0
+        for d in docs:
+            doc_blocks = d["blocks"]
+            # Never carry a heading cursor across an unheaded source file.
+            if not any(b["kind"] == "heading" for b in doc_blocks):
+                if any(b.get("text") or b.get("kind") in ("table", "image")
+                       for b in doc_blocks):
+                    stem = os.path.splitext(os.path.basename(
+                        d.get("source", "素材")))[0] or "素材"
+                    ch = _node(stem, 1)
+                    for idx, b in enumerate(doc_blocks):
+                        _append_block(ch, b, d.get("source", ""), idx)
+                    chapters.append(ch)
+                source_index += len(doc_blocks)
+                continue
+            current_ch = current_sub = current_sub3 = None
+            for b in doc_blocks:
+                if b["kind"] == "heading" and b["level"] <= 1:
+                    current_ch = _node(_strip_numbering(b["text"]), 1)
                     chapters.append(current_ch)
-                current_sub = _node(_strip_numbering(b["text"]), 2)
-                current_ch["subs"].append(current_sub)
-                current_sub3 = None
-            elif b["kind"] == "heading":  # level >= 3
-                if current_sub is None:
-                    # 无上级小节：提升为二级
+                    current_sub = None
+                    current_sub3 = None
+                elif b["kind"] == "heading" and b["level"] == 2:
                     if current_ch is None:
                         current_ch = _node(PLACEHOLDER, 1)
                         chapters.append(current_ch)
                     current_sub = _node(_strip_numbering(b["text"]), 2)
                     current_ch["subs"].append(current_sub)
                     current_sub3 = None
-                else:
-                    current_sub3 = _node(_strip_numbering(b["text"]), 3)
-                    current_sub["subs"].append(current_sub3)
-            elif b["kind"] == "table":
-                if _table_has_content(b):
-                    target_node()["tables"].append(b["rows"])
-            elif b["kind"] == "image":
-                target_node()["images"].append(
-                    {"data": b.get("data"), "ext": b.get("ext", ".png")})
-            else:  # 正文/列表/代码
-                text = b["text"]
-                if not text:
-                    continue
-                target_node()["paras"].append(text)
+                elif b["kind"] == "heading":  # level >= 3
+                    if current_sub is None:
+                        # 无上级小节：提升为二级
+                        if current_ch is None:
+                            current_ch = _node(PLACEHOLDER, 1)
+                            chapters.append(current_ch)
+                        current_sub = _node(_strip_numbering(b["text"]), 2)
+                        current_ch["subs"].append(current_sub)
+                        current_sub3 = None
+                    else:
+                        current_sub3 = _node(_strip_numbering(b["text"]), 3)
+                        current_sub["subs"].append(current_sub3)
+                elif b["kind"] in ("table", "image"):
+                    _append_block(target_node(), b, d.get("source", ""),
+                                  source_index)
+                else:  # 正文/列表/代码
+                    _append_block(target_node(), b, d.get("source", ""),
+                                  source_index)
+                source_index += 1
     else:
         # 无标题：套标准骨架并留占位符；全部内容按原文顺序放入
         # "研究内容"一章，保持叙述连贯（LLM 增强层可再做语义分章）。
@@ -272,14 +335,8 @@ def _build_chapters(docs):
             ch["paras"].append(PLACEHOLDER)
             chapters.append(ch)
         body = _node("研究内容", 1)
-        for b in blocks:
-            if b["kind"] == "table" and _table_has_content(b):
-                body["tables"].append(b["rows"])
-            elif b["kind"] == "image":
-                body["images"].append(
-                    {"data": b.get("data"), "ext": b.get("ext", ".png")})
-            elif b["text"]:
-                body["paras"].append(b["text"])
+        for idx, b in enumerate(blocks):
+            _append_block(body, b, "", idx)
         chapters.insert(3, body)
 
     return chapters, not has_heading
@@ -331,7 +388,7 @@ def _classify(title):
 def organize(docs):
     meta = _extract_meta(docs)
     chapters, auto_skeleton = _build_chapters(docs)
-    chapters, references = _split_special_chapters(chapters)
+    chapters, references = _split_special_chapters(chapters, keep_appendix=True)
 
     thesis = {
         "title": meta["title"],
@@ -363,15 +420,24 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
     for ch in chapters:
         key = classify(ch["title"])
         paras = list(ch["paras"])
+        media = []
+        for block in iter_node_blocks(ch):
+            if block.get("kind") in ("table", "image"):
+                media.append(block)
         for sub in ch.get("subs", []):
             paras.extend(sub["paras"])
+            media.extend(b for b in iter_node_blocks(sub)
+                         if b.get("kind") in ("table", "image"))
             for sub3 in sub.get("subs", []):
                 paras.extend(sub3["paras"])
+                media.extend(b for b in iter_node_blocks(sub3)
+                             if b.get("kind") in ("table", "image"))
         try:
             bl = to_bullets(paras, title=ch["title"])
         except TypeError:      # 注入的 bullets_fn 不接受 title 时退回旧签名
             bl = to_bullets(paras)
-        buckets[key].append({"title": ch["title"], "bullets": bl})
+        buckets[key].append({"title": ch["title"], "bullets": bl,
+                             "media": media})
 
     slides = []
     slides.append({"type": "cover", "title": meta["title"],
@@ -395,11 +461,39 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
             bullets = item["bullets"]
             chunks = [bullets[i:i + _MAX_BULLETS_PER_SLIDE]
                       for i in range(0, len(bullets), _MAX_BULLETS_PER_SLIDE)]
+            content_slides = []
             for pi, chunk in enumerate(chunks):
                 title = item["title"] if pi == 0 else f"{item['title']}（续）"
-                slides.append({"type": "content", "title": title,
-                               "bullets": chunk, "bucket": key})
+                slide = {"type": "content", "title": title,
+                         "bullets": chunk, "bucket": key}
+                content_slides.append(slide)
+            media_pages = _split_ppt_media(item.get("media") or [])
+            if media_pages and content_slides:
+                content_slides[0]["media"] = [media_pages[0]]
+                for mi, media in enumerate(media_pages[1:], 2):
+                    content_slides.append({
+                        "type": "content", "title": f"{item['title']}（图表{mi}）",
+                        "bullets": ["图表内容见右侧，请结合正文说明。"],
+                        "bucket": key, "media": [media]})
+            slides.extend(content_slides)
 
     slides.append({"type": "thanks", "title": "致  谢",
                    "subtitle": "恳请各位老师批评指正"})
     return {"title": meta["title"], "slides": slides}
+
+
+def _split_ppt_media(media):
+    """Split large tables into bounded pages; images already map one per page."""
+    out = []
+    for item in media:
+        if item.get("kind") != "table":
+            out.append(item)
+            continue
+        rows = item.get("rows") or []
+        if len(rows) <= 8:
+            out.append(item)
+            continue
+        header, data = rows[0], rows[1:]
+        for start in range(0, len(data), 7):
+            out.append({**item, "rows": [header] + data[start:start + 7]})
+    return out
