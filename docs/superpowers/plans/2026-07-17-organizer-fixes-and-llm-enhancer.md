@@ -47,7 +47,7 @@
 - Create: `thesis_project/tests/factories.py`
 - Create: `thesis_project/requirements.txt`
 
-- [ ] **Step 1: 创建测试目录与 conftest**
+- [x] **Step 1: 创建测试目录与 conftest**
 
 `thesis_project/tests/__init__.py` 为空文件。
 
@@ -62,7 +62,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ```
 
-- [ ] **Step 2: 创建测试工厂**
+- [x] **Step 2: 创建测试工厂**
 
 `thesis_project/tests/factories.py`：
 
@@ -91,7 +91,7 @@ def doc(blocks, meta=None, type_="md"):
     return {"source": "test", "type": type_, "blocks": blocks, "meta": meta or {}}
 ```
 
-- [ ] **Step 3: 创建 requirements.txt**
+- [x] **Step 3: 创建 requirements.txt**
 
 `thesis_project/requirements.txt`：
 
@@ -102,12 +102,12 @@ pdfplumber
 openai>=1.0
 ```
 
-- [ ] **Step 4: 验证 pytest 能发现测试目录**
+- [x] **Step 4: 验证 pytest 能发现测试目录**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: `no tests ran`（收集成功、无报错即可）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -125,7 +125,7 @@ git commit -m "chore: add test scaffolding and requirements.txt" -m "Co-Authored
 - Modify: `thesis_project/src/readers.py`（`read_txt`、`read_md` 的打开方式）
 - Test: `thesis_project/tests/test_readers_encoding.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_readers_encoding.py`：
 
@@ -163,12 +163,12 @@ def test_read_text_invalid_bytes_no_crash(tmp_path):
     assert isinstance(_read_text(str(f)), str)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_readers_encoding.py -v`
 Expected: FAIL / ERROR，`cannot import name '_read_text'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/readers.py` 的 `_clean` 函数之后新增：
 
@@ -215,12 +215,12 @@ def _read_text(path: str) -> str:
     raw = _read_text(path)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_readers_encoding.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -238,7 +238,7 @@ git commit -m "fix(readers): fall back to gb18030 when text is not utf-8" -m "Co
 - Modify: `thesis_project/src/organizer.py`（新增 `_GENERIC_HEADING`/`_looks_generic`，修改 `_extract_meta`）
 - Test: `thesis_project/tests/test_organizer_meta.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_meta.py`：
 
@@ -274,12 +274,12 @@ def test_meta_title_wins_over_heading():
     assert thesis["title"] == "来自frontmatter的题目"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_meta.py -v`
 Expected: 前两个测试 FAIL（题目被误识别为"绪论"/"第一章 绪论"），后两个 PASS
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/organizer.py` 的 `_SECTION_HINT` 定义之后新增：
 
@@ -316,12 +316,12 @@ def _looks_generic(title: str) -> bool:
             title = t
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_meta.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -340,7 +340,7 @@ git commit -m "fix(organizer): do not mistake generic chapter headings for thesi
 - Modify: `thesis_project/src/organizer.py`（`_build_chapters` 返回值改为元组、else 分支重写、`organize` 适配）
 - Test: `thesis_project/tests/test_organizer_skeleton.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_skeleton.py`：
 
@@ -378,12 +378,12 @@ def test_auto_skeleton_flag_false_with_headings():
     assert thesis["auto_skeleton"] is False
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_skeleton.py -v`
 Expected: 4 FAIL（无"研究内容"章、无 auto_skeleton 键）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/organizer.py` 中 `_build_chapters` 的 else 分支（原第 123-133 行）：
 
@@ -439,12 +439,12 @@ Expected: 4 FAIL（无"研究内容"章、无 auto_skeleton 键）
         "auto_skeleton": auto_skeleton,
 ```
 
-- [ ] **Step 4: 运行确认通过（含回归）**
+- [x] **Step 4: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed（此前任务的测试不回归）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -463,7 +463,7 @@ git commit -m "fix(organizer): keep paragraph order for headingless docs in sing
 - Modify: `thesis_project/src/organizer.py`（新增 `_NUM_PREFIX`/`_strip_numbering`，`_build_chapters` 建章/节时调用）
 - Test: `thesis_project/tests/test_organizer_numbering.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_numbering.py`：
 
@@ -497,12 +497,12 @@ def test_chapter_and_sub_titles_stripped():
     assert ch["subs"][0]["title"] == "研究背景"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_numbering.py -v`
 Expected: ERROR，`cannot import name '_strip_numbering'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/organizer.py` 的 `_looks_generic` 之后新增：
 
@@ -536,12 +536,12 @@ def _strip_numbering(title: str) -> str:
 
 （level>=3 分支此时仍是并入段落文本，Task 6 再改。）
 
-- [ ] **Step 4: 运行确认通过（含回归）**
+- [x] **Step 4: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -559,7 +559,7 @@ git commit -m "fix(organizer): strip pre-existing numbering from chapter titles"
 - Modify: `thesis_project/src/organizer.py`（新增 `_split_special_chapters`，`organize` 接入）
 - Test: `thesis_project/tests/test_organizer_special.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_special.py`：
 
@@ -601,12 +601,12 @@ def test_default_reference_kept_when_no_ref_chapter():
     assert "GB/T 7714" in thesis["references"][0]
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_special.py -v`
 Expected: 前两个 FAIL，第三个 PASS
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/organizer.py` 的 `_strip_numbering` 之后新增：
 
@@ -669,12 +669,12 @@ thesis 字典中把：
         ],
 ```
 
-- [ ] **Step 4: 运行确认通过（含回归）**
+- [x] **Step 4: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -693,7 +693,7 @@ git commit -m "fix(organizer): extract reference chapter, drop abstract/toc/than
 - Modify: `thesis_project/src/docx_builder.py`（渲染 Heading 3）
 - Test: `thesis_project/tests/test_organizer_level3.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_level3.py`：
 
@@ -745,12 +745,12 @@ def test_docx_renders_level3(tmp_path):
     assert any("前端模块" in t for t in h3)
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_level3.py -v`
 Expected: 4 FAIL（sub 没有 "subs" 键 / KeyError / Heading 3 不存在）
 
-- [ ] **Step 3: 实现 organizer**
+- [x] **Step 3: 实现 organizer**
 
 `src/organizer.py` 的 `_build_chapters` 中 `has_heading` 分支整体替换为如下（这是该分支在 Task 3/4/5 之后的完整最终形态）：
 
@@ -823,7 +823,7 @@ Expected: 4 FAIL（sub 没有 "subs" 键 / KeyError / Heading 3 不存在）
                 paras.extend(sub3["paras"])
 ```
 
-- [ ] **Step 4: 实现 docx_builder**
+- [x] **Step 4: 实现 docx_builder**
 
 `src/docx_builder.py` 的 `build()` 中，二级小节循环体：
 
@@ -859,12 +859,12 @@ Expected: 4 FAIL（sub 没有 "subs" 键 / KeyError / Heading 3 不存在）
                     _add_para(doc, para, W["body"], indent_chars=2)
 ```
 
-- [ ] **Step 5: 运行确认通过（含回归）**
+- [x] **Step 5: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -882,7 +882,7 @@ git commit -m "feat(organizer,docx): support level-3 headings in chapter tree an
 - Modify: `thesis_project/src/organizer.py`（`_table_to_text`）
 - Test: `thesis_project/tests/test_organizer_table.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_organizer_table.py`：
 
@@ -908,12 +908,12 @@ def test_empty_cells_skipped():
     assert _table_to_text(blk) == "a | b"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_organizer_table.py -v`
 Expected: FAIL（第 3、4 行数据不在输出里）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `src/organizer.py` 中把：
 
@@ -937,12 +937,12 @@ def _table_to_text(block):
     return "\n".join(lines)
 ```
 
-- [ ] **Step 4: 运行确认通过（含回归）**
+- [x] **Step 4: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -962,7 +962,7 @@ git commit -m "fix(organizer): keep all table rows when converting to text" -m "
 - Modify: `thesis_project/src/readers.py`（新增 `_join_lines`/`_pdf_heading_level`/`_pdf_lines_to_blocks`，重写 `read_pdf` 的 pdfplumber 路径）
 - Test: `thesis_project/tests/test_readers_pdf.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_readers_pdf.py`：
 
@@ -1010,12 +1010,12 @@ def test_long_unpunctuated_line_not_heading():
     assert blocks[0]["kind"] == "paragraph"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_readers_pdf.py -v`
 Expected: ERROR，`cannot import name '_join_lines'`
 
-- [ ] **Step 3: 实现纯函数**
+- [x] **Step 3: 实现纯函数**
 
 在 `src/readers.py` 的 `read_pdf` 之前新增：
 
@@ -1072,12 +1072,12 @@ def _pdf_lines_to_blocks(txt: str, blocks: list) -> None:
     flush()
 ```
 
-- [ ] **Step 4: 运行纯函数测试确认通过**
+- [x] **Step 4: 运行纯函数测试确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_readers_pdf.py -v`
 Expected: 6 passed
 
-- [ ] **Step 5: 重写 read_pdf 的 pdfplumber 路径**
+- [x] **Step 5: 重写 read_pdf 的 pdfplumber 路径**
 
 `src/readers.py` 中把 `read_pdf` 的 pdfplumber 分支：
 
@@ -1142,12 +1142,12 @@ Expected: 6 passed
             _pdf_lines_to_blocks(txt, blocks)
 ```
 
-- [ ] **Step 6: 运行全部测试确认通过**
+- [x] **Step 6: 运行全部测试确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1166,7 +1166,7 @@ git commit -m "fix(readers): line-based pdf paragraphing, heading detection, tab
 - Modify: `thesis_project/src/pptx_builder.py`（删除 `_footer` 死代码）
 - Test: `thesis_project/tests/test_deck_overflow.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_deck_overflow.py`：
 
@@ -1205,12 +1205,12 @@ def test_truncation_cuts_at_comma():
     assert bullets[0] == "本系统采用了轻量化设计方案与迁移学习方法…"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_deck_overflow.py -v`
 Expected: 第 1、3 个 FAIL（只有 1 页 content、截断带残句），第 2 个 PASS
 
-- [ ] **Step 3: 实现 organizer**
+- [x] **Step 3: 实现 organizer**
 
 `src/organizer.py` 顶部 `import re` 之后新增：
 
@@ -1265,7 +1265,7 @@ def _to_bullets(paras, max_bullets=12, max_len=40):
                                "bullets": chunk})
 ```
 
-- [ ] **Step 4: 清理 pptx_builder 死代码**
+- [x] **Step 4: 清理 pptx_builder 死代码**
 
 `src/pptx_builder.py` 的 `_footer` 中删除这两行：
 
@@ -1276,12 +1276,12 @@ def _to_bullets(paras, max_bullets=12, max_len=40):
 
 （`bullets[:P["layout"]["max_bullets_per_slide"]]` 保留不动，作为 builder 端的最后防线。）
 
-- [ ] **Step 5: 运行确认通过（含回归）**
+- [x] **Step 5: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1297,7 +1297,7 @@ git commit -m "feat(deck): paginate overflowing bullets, comma-aware truncation,
 - Create: `thesis_project/src/llm_enhancer.py`
 - Test: `thesis_project/tests/test_llm_base.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_llm_base.py`：
 
@@ -1340,12 +1340,12 @@ def test_chat_json_no_json_raises(monkeypatch):
         llm_enhancer._chat_json("s", "u")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_base.py -v`
 Expected: ERROR，`No module named 'src.llm_enhancer'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 新建 `thesis_project/src/llm_enhancer.py`：
 
@@ -1411,12 +1411,12 @@ def _chat_json(system: str, user: str):
     return obj
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_base.py -v`
 Expected: 6 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1432,7 +1432,7 @@ git commit -m "feat(llm): add OpenAI-compatible client base with robust JSON par
 - Modify: `thesis_project/src/llm_enhancer.py`（新增 `refine_meta`、`translate_abstract`）
 - Test: `thesis_project/tests/test_llm_meta.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_llm_meta.py`：
 
@@ -1505,12 +1505,12 @@ def test_translate_abstract_skipped_when_no_abstract(monkeypatch):
     assert t["abstract_en"] == PLACEHOLDER
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_meta.py -v`
 Expected: ERROR，`has no attribute 'refine_meta'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/llm_enhancer.py` 末尾追加：
 
@@ -1571,12 +1571,12 @@ def translate_abstract(thesis: dict) -> None:
                                  if str(x).strip()][:5]
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_meta.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1596,7 +1596,7 @@ git commit -m "feat(llm): meta extraction and english abstract translation" -m "
 - Modify: `thesis_project/src/llm_enhancer.py`（新增 `classify_chapters`）
 - Test: `thesis_project/tests/test_llm_classify.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_llm_classify.py`：
 
@@ -1642,12 +1642,12 @@ def test_classify_chapters_filters_invalid(monkeypatch):
     assert got == {"绪论": "background", "实验": "result"}
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_classify.py -v`
 Expected: FAIL/ERROR（`_build_deck` 不接受关键字参数、`classify_chapters` 不存在）
 
-- [ ] **Step 3: 实现 organizer 注入点**
+- [x] **Step 3: 实现 organizer 注入点**
 
 `src/organizer.py` 的 `_build_deck` 开头：
 
@@ -1687,7 +1687,7 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
         buckets[key].append({"title": ch["title"], "bullets": to_bullets(paras)})
 ```
 
-- [ ] **Step 4: 实现 llm_enhancer.classify_chapters**
+- [x] **Step 4: 实现 llm_enhancer.classify_chapters**
 
 在 `src/llm_enhancer.py` 末尾追加：
 
@@ -1711,12 +1711,12 @@ def classify_chapters(titles) -> dict:
     return {str(t): b for t, b in data.items() if b in _VALID_BUCKETS}
 ```
 
-- [ ] **Step 5: 运行确认通过（含回归）**
+- [x] **Step 5: 运行确认通过（含回归）**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1732,7 +1732,7 @@ git commit -m "feat(deck): classify_fn/bullets_fn injection points + llm chapter
 - Modify: `thesis_project/src/llm_enhancer.py`（新增 `_llm_bullets`、`_safe_bullets`、`rebuild_deck`）
 - Test: `thesis_project/tests/test_llm_bullets.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_llm_bullets.py`：
 
@@ -1806,12 +1806,12 @@ def test_rebuild_deck_classify_failure_falls_back(monkeypatch):
     assert "某个古怪标题" in titles_after
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_bullets.py -v`
 Expected: ERROR，`has no attribute '_llm_bullets'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/llm_enhancer.py` 末尾追加：
 
@@ -1859,12 +1859,12 @@ def rebuild_deck(thesis: dict) -> dict:
                        bullets_fn=_safe_bullets)
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_bullets.py -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -1880,7 +1880,7 @@ git commit -m "feat(llm): bullet refinement with rule fallback and deck rebuild"
 - Modify: `thesis_project/src/llm_enhancer.py`（新增 `rechapter`）
 - Test: `thesis_project/tests/test_llm_rechapter.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_llm_rechapter.py`：
 
@@ -1945,12 +1945,12 @@ def test_rechapter_noop_when_llm_assigns_nothing(monkeypatch):
         ["A段背景。", "B段方法。", "C段其它。", "D段展望。"]
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_rechapter.py -v`
 Expected: ERROR，`has no attribute 'rechapter'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `src/llm_enhancer.py` 末尾追加：
 
@@ -2004,12 +2004,12 @@ def rechapter(thesis: dict) -> None:
     thesis["chapters"] = new_chapters
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_llm_rechapter.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -2027,7 +2027,7 @@ git commit -m "feat(llm): semantic re-chaptering for headingless documents" -m "
 - Modify: `thesis_project/README.md`（LLM 用法段落）
 - Test: `thesis_project/tests/test_e2e.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 `thesis_project/tests/test_e2e.py`：
 
@@ -2075,12 +2075,12 @@ def test_full_pipeline_sample(tmp_path):
     assert os.path.getsize(pp) > 0
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests/test_e2e.py -v`
 Expected: 前两个 ERROR（`has no attribute 'enhance'`），第三个 PASS
 
-- [ ] **Step 3: 实现 enhance 总入口**
+- [x] **Step 3: 实现 enhance 总入口**
 
 在 `src/llm_enhancer.py` 末尾追加：
 
@@ -2112,7 +2112,7 @@ def enhance(thesis: dict, deck: dict, docs: list):
     return thesis, deck
 ```
 
-- [ ] **Step 4: main.py 接入 --llm**
+- [x] **Step 4: main.py 接入 --llm**
 
 `src/main.py` 中，在：
 
@@ -2148,7 +2148,7 @@ def enhance(thesis: dict, deck: dict, docs: list):
     print(f"  论文：{len(thesis['chapters'])} 章；PPT：{len(deck['slides'])} 页。")
 ```
 
-- [ ] **Step 5: 更新 README**
+- [x] **Step 5: 更新 README**
 
 `README.md` 的「方式二：命令行」代码块中 `python src/main.py --output 某输出目录` 一行之后追加：
 
@@ -2198,7 +2198,7 @@ python src/main.py --llm
 依赖：`python-docx`、`python-pptx`、`pdfplumber`（读 PDF）；`openai`（仅 --llm 需要）。
 ```
 
-- [ ] **Step 6: 全量测试 + 真实样例运行**
+- [x] **Step 6: 全量测试 + 真实样例运行**
 
 Run: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python -m pytest tests -v`
 Expected: 全部 passed
@@ -2209,7 +2209,7 @@ Expected: 正常生成两份草案，无异常输出；`论文：5 章`（sample
 Run（无 key 时 --llm 应优雅跳过）: `cd "D:/BackendDevelopment/Project/Project_Test-7/thesis_project" && python src/main.py --input sample_input --output output --llm`
 Expected: 打印 `[LLM] 未设置 LLM_API_KEY，跳过增强`，仍正常生成两份草案
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd "D:/BackendDevelopment/Project/Project_Test-7"
@@ -2221,15 +2221,15 @@ git commit -m "feat: wire --llm flag with graceful fallback, docs and e2e tests"
 
 ## 验收清单（全部完成后逐项核对）
 
-- [ ] `python -m pytest tests -v` 全绿
-- [ ] GBK 编码 txt 能正确读取（Task 1）
-- [ ] `# 绪论` 不再被当成论文题目（Task 2）
-- [ ] 纯 txt 输入段落顺序保持、单章存放、带 `auto_skeleton` 标记（Task 3）
-- [ ] "第一章 绪论"不再渲染成"第一章　第一章 绪论"（Task 4）
-- [ ] 源文件参考文献被抽取、摘要/致谢章不再进正文（Task 5）
-- [ ] `###` 三级标题进入 docx Heading 3（Task 6）
-- [ ] 表格所有行保留（Task 7）
-- [ ] PDF 按行重组分段、编号行识别为标题、表格文字不重复（Task 8）
-- [ ] PPT 要点超 6 条自动分"（续）"页、逗号处截断（Task 9）
-- [ ] 无 `LLM_API_KEY` 时 `--llm` 优雅跳过；有 key 但 API 全挂时仍产出规则草案（Task 10-15）
-- [ ] `run.bat` 双击流程不受影响（未改动该文件）
+- [x] `python -m pytest tests -v` 全绿
+- [x] GBK 编码 txt 能正确读取（Task 1）
+- [x] `# 绪论` 不再被当成论文题目（Task 2）
+- [x] 纯 txt 输入段落顺序保持、单章存放、带 `auto_skeleton` 标记（Task 3）
+- [x] "第一章 绪论"不再渲染成"第一章　第一章 绪论"（Task 4）
+- [x] 源文件参考文献被抽取、摘要/致谢章不再进正文（Task 5）
+- [x] `###` 三级标题进入 docx Heading 3（Task 6）
+- [x] 表格所有行保留（Task 7）
+- [x] PDF 按行重组分段、编号行识别为标题、表格文字不重复（Task 8）
+- [x] PPT 要点超 6 条自动分"（续）"页、逗号处截断（Task 9）
+- [x] 无 `LLM_API_KEY` 时 `--llm` 优雅跳过；有 key 但 API 全挂时仍产出规则草案（Task 10-15）
+- [x] `run.bat` 双击流程不受影响（未改动该文件）

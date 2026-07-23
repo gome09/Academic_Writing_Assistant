@@ -43,7 +43,7 @@ Word 域刷新用可选的 win32com 后处理模块，缺 pywin32/Word 时优雅
 - Modify: `thesis_project/src/main.py`（新增 `_build_with_retry`，改写 95-103 行的生成段）
 - Test: `thesis_project/tests/test_main_build_retry.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -74,12 +74,12 @@ def test_build_with_retry_gives_up_after_all_locked(tmp_path, capsys):
     assert "占用" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_main_build_retry.py -v`
 Expected: FAIL，`AttributeError: ... has no attribute '_build_with_retry'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `main.py` 的 `gather_docs` 之后新增：
 
@@ -125,12 +125,12 @@ def _build_with_retry(build_fn, data, out_path):
 
 并把末尾 `return 0` 改为 `return 0 if ok else 1`。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_main_build_retry.py tests/test_main_gather.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -148,7 +148,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/readers.py`（新增 `_ensure_has_text`，`read_pdf` 末尾调用）
 - Test: `thesis_project/tests/test_readers_pdf_scanned.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -176,12 +176,12 @@ def test_ensure_has_text_passes_with_table_only():
         [readers._block("table", "", rows=[["a", "b"]])], "a.pdf")
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_pdf_scanned.py -v`
 Expected: FAIL，`AttributeError: ... no attribute '_ensure_has_text'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `readers.py` 的 PDF 区块（`_pdf_lines_to_blocks` 附近）新增：
 
@@ -200,12 +200,12 @@ def _ensure_has_text(blocks: list, path: str) -> None:
 在 `read_pdf` 的 `return {...}`（约 330 行）之前加一行 `_ensure_has_text(blocks, path)`。
 注意 pdfplumber 分支与 pypdf 回退分支共用同一个 return，只需加这一处。
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_readers_pdf_scanned.py tests/test_readers_pdf.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -223,7 +223,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/readers.py`（`_PDF_HEADING` 253 行、`read_docx` 208-214 行、新增 `_looks_like_manual_heading`）
 - Test: `thesis_project/tests/test_readers_docx_manual_heading.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -276,12 +276,12 @@ def test_pdf_heading_regex_rejects_year():
     assert readers._PDF_HEADING.match("2.3 实验设计") is not None
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_docx_manual_heading.py -v`
 Expected: FAIL（手工标题被读成 paragraph；年份正则断言失败）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 253 行 `_PDF_HEADING` 改为（负向前瞻排除 4 位年份，注意用非捕获组保持 group(1) 语义不变）：
 
@@ -319,12 +319,12 @@ def _looks_like_manual_heading(text: str) -> bool:
 
 （`_looks_like_manual_heading`/`_pdf_heading_level` 定义在 read_docx 之后不影响运行时解析。）
 
-- [ ] **Step 4: 运行确认通过（含既有 docx/pdf 测试防回归）**
+- [x] **Step 4: 运行确认通过（含既有 docx/pdf 测试防回归）**
 
 Run: `python -m pytest tests/test_readers_docx_manual_heading.py tests/test_readers_docx_heading_chain.py tests/test_readers_pdf.py -v`
 Expected: 全部 PASS。若 `test_readers_pdf.py` 有对旧正则的断言失败，先确认新行为正确再更新该断言。
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -342,7 +342,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/organizer.py`（模块级新增 `_ABSTRACT_LABEL`，改写 `_extract_meta` 144-149 行）
 - Test: `thesis_project/tests/test_organizer_abstract.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -389,12 +389,12 @@ def test_abstract_next_block_skips_heading():
     assert meta["abstract"] != "第一章 绪论"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_organizer_abstract.py -v`
 Expected: 至少 `test_abstraction_...` 与 `skips_keyword_line` FAIL
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `organizer.py` 模块级（`_DROP_TITLE` 附近）新增：
 
@@ -420,12 +420,12 @@ _ABSTRACT_LABEL = re.compile(r"^(摘[，\s]*要|abstract\b)[：:\s]*", re.I)
             abstract = body or None
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_organizer_abstract.py tests/test_organizer_meta.py tests/test_organizer_meta_yaml.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -443,7 +443,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/organizer.py`（`_split_special_chapters` 102-103 行）
 - Test: `thesis_project/tests/test_organizer_special.py`（追加用例）
 
-- [ ] **Step 1: 写失败测试（追加到 test_organizer_special.py 末尾）**
+- [x] **Step 1: 写失败测试（追加到 test_organizer_special.py 末尾）**
 
 ```python
 def test_dropped_chapter_with_content_prints_notice(capsys):
@@ -465,12 +465,12 @@ def test_dropped_empty_chapter_silent(capsys):
 
 （若该文件没有 `import organizer`，按其现有 import 风格补 `from src import organizer`。）
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_organizer_special.py -v`
 Expected: 新增两条 FAIL（无输出）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `_split_special_chapters` 中 `_DROP_TITLE` 命中分支（原 102-103 行）改为：
 
@@ -484,12 +484,12 @@ Expected: 新增两条 FAIL（无输出）
             continue
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_organizer_special.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -515,7 +515,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/readers.py`（`read_docx` 201-221 行、`read_pdf` pdfplumber 分支）
 - Test: `thesis_project/tests/test_readers_docx_images.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -558,12 +558,12 @@ def test_read_docx_without_images_unchanged(tmp_path):
     assert all(b["kind"] != "image" for b in doc["blocks"])
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_readers_docx_images.py -v`
 Expected: FAIL（无 image 块；`add_picture` 产生的空文本段被 `continue` 跳过）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `read_docx` 的 `w:p` 分支（原 202-214 行）：**先提图片，再判空文本**（图片段落通常无文字，旧代码会在 `if not text: continue` 处把它跳过）：
 
@@ -596,12 +596,12 @@ Expected: FAIL（无 image 块；`add_picture` 产生的空文本段被 `continu
                       "PDF 图片暂不导入，请在草案中手工补图")
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_readers_docx_images.py tests/test_readers_docx_table_order.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 全量测试 + 提交**
+- [x] **Step 5: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -621,7 +621,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/tests/test_organizer_table.py`（更新"拍平进 paras"的旧断言）
 - Test: `thesis_project/tests/test_organizer_media.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -688,12 +688,12 @@ def test_rechapter_carries_media(monkeypatch):
     assert len(all_tables) == 1 and len(all_images) == 1
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_organizer_media.py -v`
 Expected: FAIL（`KeyError: 'tables'` 等）
 
-- [ ] **Step 3: 实现 organizer**
+- [x] **Step 3: 实现 organizer**
 
 在 `_build_chapters` 之前新增节点工厂（消除 9 处字面量重复）：
 
@@ -753,7 +753,7 @@ def _node(title, level):
         chapters.insert(3, body)
 ```
 
-- [ ] **Step 4: 实现 rechapter 媒体保留（llm_enhancer.py）**
+- [x] **Step 4: 实现 rechapter 媒体保留（llm_enhancer.py）**
 
 `rechapter` 中构建 `new_chapters` 后、`thesis["chapters"] = new_chapters` 之前插入：
 
@@ -771,16 +771,16 @@ def _node(title, level):
         carrier["images"].extend(images)
 ```
 
-- [ ] **Step 5: 更新旧断言**
+- [x] **Step 5: 更新旧断言**
 
 读 `tests/test_organizer_table.py`：凡断言"表格文本出现在 `paras`/deck bullets 中"的用例，改为断言 `ch["tables"]` 挂载了 rows；`_table_to_text` 的直接单测保留不动。
 
-- [ ] **Step 6: 运行确认通过**
+- [x] **Step 6: 运行确认通过**
 
 Run: `python -m pytest tests/test_organizer_media.py tests/test_organizer_table.py tests/test_organizer_skeleton.py tests/test_llm_rechapter.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 7: 全量测试 + 提交**
+- [x] **Step 7: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -798,7 +798,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/docx_builder.py`（新增 `_add_three_line_table`/`_add_image`/`_render_media`，正文循环 274-297 行插调用）
 - Test: `thesis_project/tests/test_docx_builder_media.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -862,12 +862,12 @@ def test_chapters_without_media_keys_still_build(tmp_path):
     docx_builder.build(thesis, str(tmp_path / "o.docx"))   # .get() 容错
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_docx_builder_media.py -v`
 Expected: 前三条 FAIL（无表格/图片/题注）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 顶部补充 import（与现有 import 合并，已有的不重复加）：
 
@@ -976,12 +976,12 @@ def _render_media(doc, node, ci, counters):
                 _render_media(doc, sub3, ci, counters)  # 加在条 paras 循环之后
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `python -m pytest tests/test_docx_builder_media.py tests/test_e2e.py -v`
 Expected: 全部 PASS
 
-- [ ] **Step 5: 样例冒烟 + 全量测试 + 提交**
+- [x] **Step 5: 样例冒烟 + 全量测试 + 提交**
 
 ```bash
 python src/main.py --input sample_input --output output_smoke
@@ -1004,7 +1004,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/llm_enhancer.py`（`_client` 33-36 行）
 - Test: `thesis_project/tests/test_llm_client.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1040,12 +1040,12 @@ def test_client_timeout_env_override(monkeypatch):
     assert captured["timeout"] == 30.0
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_client.py -v`
 Expected: FAIL，`KeyError: 'timeout'`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 先看 `_client`（33-36 行）现状：若 `from openai import OpenAI` 在模块顶部，测试里 `monkeypatch.setattr("openai.OpenAI", ...)` 不会生效——此时把导入移进函数内（下方写法）。改为：
 
@@ -1060,7 +1060,7 @@ def _client():
 
 （`api_key`/`base_url` 的取法以原实现为准，只新增 `timeout`/`max_retries` 两个参数与 `LLM_TIMEOUT` 读取。）
 
-- [ ] **Step 4: 运行确认通过 + 提交**
+- [x] **Step 4: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_llm_client.py tests/test_llm_base.py -v
@@ -1082,7 +1082,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/tests/test_llm_base.py`（既有 `_chat` 打桩 lambda 加 `**kw`）
 - Test: `thesis_project/tests/test_llm_json_mode.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1160,12 +1160,12 @@ def test_chat_json_requests_json_mode(monkeypatch):
     assert seen["json_mode"] is True
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_json_mode.py -v`
 Expected: FAIL（`_chat` 不接受 `json_mode`）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `_chat` 改为（消息构造、model、temperature 沿用原实现）：
 
@@ -1189,11 +1189,11 @@ def _chat(system: str, user: str, json_mode: bool = False) -> str:
 
 `_chat_json`（50-60 行）里对 `_chat` 的调用改为 `_chat(sys2, user, json_mode=True)`（`sys2` 指该函数内拼接了"只输出 JSON"的 system 变量名，以实际代码为准——JSON mode 要求消息中出现 "JSON" 字样，现有提示词已满足）。剥壳与 `raw_decode` 解析逻辑**保持不变**作为兜底。
 
-- [ ] **Step 4: 更新既有打桩**
+- [x] **Step 4: 更新既有打桩**
 
 `grep -rn "monkeypatch.setattr(llm_enhancer, \"_chat\"" tests/`，把所有 `lambda s, u: ...` 改为 `lambda s, u, **kw: ...`（test_llm_base.py 有 5 处；其它 test_llm_* 若打的是 `_chat_json` 则无需改）。
 
-- [ ] **Step 5: 运行确认通过 + 提交**
+- [x] **Step 5: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_llm_json_mode.py tests/test_llm_base.py -v
@@ -1212,7 +1212,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/llm_enhancer.py`（`rechapter` 227-234 行）
 - Test: `thesis_project/tests/test_llm_rechapter.py`（追加用例）
 
-- [ ] **Step 1: 写失败测试（追加）**
+- [x] **Step 1: 写失败测试（追加）**
 
 ```python
 def test_rechapter_normalizes_returned_keys(monkeypatch):
@@ -1230,12 +1230,12 @@ def test_rechapter_normalizes_returned_keys(monkeypatch):
 
 （import 与既有 test_llm_rechapter.py 风格一致。）
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_rechapter.py -v`
 Expected: 新用例 FAIL（键不匹配，段落全部留在"研究内容"）
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 `rechapter` 中 `data.get(name, [])` 的查表（227-234 行）改为先归一化：
 
@@ -1255,7 +1255,7 @@ Expected: 新用例 FAIL（键不匹配，段落全部留在"研究内容"）
 
 （`from src.organizer import ...` 与函数内既有的 organizer 导入合并成一行。）
 
-- [ ] **Step 4: 运行确认通过 + 提交**
+- [x] **Step 4: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_llm_rechapter.py -v
@@ -1275,7 +1275,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/organizer.py`（`_to_bullets` 加 `title=None` 形参；`_build_deck` 315 行传 title，带 TypeError 兼容回退）
 - Test: `thesis_project/tests/test_llm_bullets_batch.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1330,12 +1330,12 @@ def test_llm_bullets_batch_normalizes_and_caps(monkeypatch):
     assert all(len(b) <= 40 for b in out[key])  # 单条截 40 字
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_bullets_batch.py -v`
 Expected: FAIL（无 `_llm_bullets_batch`；调用次数为 4 而非 2）
 
-- [ ] **Step 3: 实现 llm_enhancer**
+- [x] **Step 3: 实现 llm_enhancer**
 
 在 `_llm_bullets` 附近新增：
 
@@ -1405,7 +1405,7 @@ def rebuild_deck(thesis: dict) -> dict:
 
 说明：批量失败时整体回退**规则**提炼（风格统一、零额外调用），不再逐章调 LLM；`_llm_bullets`/`_safe_bullets` 保留（既有测试仍覆盖），不再被 `rebuild_deck` 引用。
 
-- [ ] **Step 4: 实现 organizer 侧 title 透传**
+- [x] **Step 4: 实现 organizer 侧 title 透传**
 
 `_to_bullets` 签名改为 `def _to_bullets(paras, max_bullets=12, max_len=40, title=None):`（`title` 仅占位，函数体不用）。
 `_build_deck` 315 行改为兼容注入方旧签名的调用：
@@ -1418,7 +1418,7 @@ def rebuild_deck(thesis: dict) -> dict:
         buckets[key].append({"title": ch["title"], "bullets": bl})
 ```
 
-- [ ] **Step 5: 运行确认通过 + 提交**
+- [x] **Step 5: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_llm_bullets_batch.py tests/test_llm_bullets.py tests/test_safe_bullets_summary.py tests/test_deck_overflow.py -v
@@ -1438,7 +1438,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/src/pptx_builder.py`（build 循环 195-202 行写入 notes_slide）
 - Test: `thesis_project/tests/test_llm_notes.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1482,12 +1482,12 @@ def test_pptx_builder_writes_notes(tmp_path):
     assert prs.slides[1].notes_slide.notes_text_frame.text == "这里是口播备注。"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_llm_notes.py -v`
 Expected: FAIL（无 `add_speaker_notes`；pptx 无备注）
 
-- [ ] **Step 3: 实现 llm_enhancer**
+- [x] **Step 3: 实现 llm_enhancer**
 
 ```python
 _NOTES_SYS = ("你是答辩教练。为每页幻灯片写80~120字的口语化演讲备注，"
@@ -1525,7 +1525,7 @@ def add_speaker_notes(deck: dict) -> None:
         print(f"  [LLM告警] 演讲备注失败：{e}")
 ```
 
-- [ ] **Step 4: 实现 pptx_builder**
+- [x] **Step 4: 实现 pptx_builder**
 
 build 的 slide 循环（195-202 行）里，`_DISPATCH` 分发之后追加：
 
@@ -1534,7 +1534,7 @@ build 的 slide 循环（195-202 行）里，`_DISPATCH` 分发之后追加：
             prs.slides[-1].notes_slide.notes_text_frame.text = s["notes"]
 ```
 
-- [ ] **Step 5: 运行确认通过 + 提交 + README**
+- [x] **Step 5: 运行确认通过 + 提交 + README**
 
 ```bash
 python -m pytest tests/test_llm_notes.py tests/test_pptx_warnings.py -v
@@ -1557,7 +1557,7 @@ README 的"LLM 增强"一节增强内容清单里补一句"每页演讲备注（
 - Modify: `thesis_project/src/docx_builder.py`（新增 `_enable_update_fields`，`build` 末尾调用）
 - Test: `thesis_project/tests/test_docx_update_fields.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1585,12 +1585,12 @@ def test_update_fields_flag_present(tmp_path):
     assert el.get(qn("w:val")) == "true"
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_docx_update_fields.py -v`
 Expected: FAIL，`el is None`
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 在 `_add_toc` 附近新增（`OxmlElement` 已在 Task 8 引入；若 Task 8 未先做，则此处补 import）：
 
@@ -1608,7 +1608,7 @@ def _enable_update_fields(doc):
 `build` 中 `doc.save(out_path)`（原 311 行）之前加 `_enable_update_fields(doc)`。
 同时把 `_add_toc` 内的提示文本 `"【在 Word 中按 F9 更新目录】"`（158 行）改为 `"【打开文档后按提示更新域，或按 F9】"`，README"完成"提示同步微调（main.py 106 行的收尾文案也提到 F9，一并改）。
 
-- [ ] **Step 4: 运行确认通过 + 提交**
+- [x] **Step 4: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_docx_update_fields.py tests/test_docx_toc.py -v
@@ -1629,7 +1629,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/requirements.txt`（追加 pywin32 条目）
 - Test: `thesis_project/tests/test_postprocess.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1664,12 +1664,12 @@ def test_refresh_fields_graceful_when_word_missing(monkeypatch, tmp_path, capsys
     assert "F9" in capsys.readouterr().out
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_postprocess.py -v`
 Expected: FAIL，`ModuleNotFoundError: src.postprocess`
 
-- [ ] **Step 3: 实现 postprocess.py（完整新文件）**
+- [x] **Step 3: 实现 postprocess.py（完整新文件）**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1725,7 +1725,7 @@ def refresh_word_fields(docx_path: str, export_pdf: bool = False) -> bool:
             pass
 ```
 
-- [ ] **Step 4: 接入 main.py**
+- [x] **Step 4: 接入 main.py**
 
 argparse 增加两个参数（`--llm` 之后）：
 
@@ -1750,7 +1750,7 @@ Word 生成成功分支（Task 1 改造后的 `if wp:` 内）追加：
 pywin32>=306; sys_platform == "win32"
 ```
 
-- [ ] **Step 5: 运行确认通过 + 真机冒烟 + 提交**
+- [x] **Step 5: 运行确认通过 + 真机冒烟 + 提交**
 
 ```bash
 python -m pytest tests/test_postprocess.py -v
@@ -1778,7 +1778,7 @@ README"其它用法"代码块补 `--refresh-fields` / `--pdf` 两行说明。
 - Modify: `thesis_project/src/pptx_builder.py`（`_check_structure` 215-238 行补 bucket 页数校验，docstring 更新）
 - Test: `thesis_project/tests/test_pptx_structure_buckets.py`（新建）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```python
 # -*- coding: utf-8 -*-
@@ -1834,12 +1834,12 @@ def test_check_structure_ok_no_bucket_warning(capsys):
 
 （若 `PPT_SPEC["structure"]` 各段 min/max 与上面第三个用例的页数不匹配，按 `config/format_spec.py:162-170` 的实际值调整页数，使其全部落在区间内。）
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `python -m pytest tests/test_pptx_structure_buckets.py -v`
 Expected: FAIL（slide 无 bucket 键；无 bucket 警告输出）
 
-- [ ] **Step 3: 实现 organizer**
+- [x] **Step 3: 实现 organizer**
 
 `_build_deck` 中 4 处 slide 构造加 `"bucket": key`（329、330-331、333、340-341 行）：
 
@@ -1855,7 +1855,7 @@ Expected: FAIL（slide 无 bucket 键；无 bucket 警告输出）
                                "bullets": chunk, "bucket": key})
 ```
 
-- [ ] **Step 4: 实现 pptx_builder**
+- [x] **Step 4: 实现 pptx_builder**
 
 `_check_structure` 末尾追加（并把 docstring 里"无分段归属标记而不校验"的说明改为"content 页按 bucket 校验"）：
 
@@ -1875,7 +1875,7 @@ Expected: FAIL（slide 无 bucket 键；无 bucket 警告输出）
                   f"规范建议 {seg.get('min')}~{seg.get('max')} 页")
 ```
 
-- [ ] **Step 5: 运行确认通过 + 提交**
+- [x] **Step 5: 运行确认通过 + 提交**
 
 ```bash
 python -m pytest tests/test_pptx_structure_buckets.py tests/test_pptx_page_count.py tests/test_pptx_warnings.py tests/test_deck_overflow.py -v
@@ -1901,17 +1901,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `thesis_project/config/format_spec.py`
 - Modify: `thesis_project/README.md`
 
-- [ ] **Step 1: 给未被代码读取的字段加行尾注释 `# 暂未落实`**
+- [x] **Step 1: 给未被代码读取的字段加行尾注释 `# 暂未落实`**
 
 逐项核对（Task 8/16 完成后 `figure`/`table`/`structure` 已激活，无需标注）：
 - `WORD_SPEC`：`headings.*.outline_level`、`toc.leader`、`toc.page_number_align`、`reference.standard`
 - `PPT_SPEC`：`slide.ratio`、`font.max_font_kinds`、`layout.background`、`principle.talk_minutes`、`principle.rule`、`principle.narrative`
 
-- [ ] **Step 2: README"自定义"一节补一句**
+- [x] **Step 2: README"自定义"一节补一句**
 
 "仍标注`# 暂未落实`的字段目前仅作文档参考；已经接入生成器的字段可通过 YAML 模板生效。"
 
-- [ ] **Step 3: 全量测试 + 提交**
+- [x] **Step 3: 全量测试 + 提交**
 
 ```bash
 python -m pytest tests/ -q
@@ -1927,7 +1927,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Delete: `thesis_project/tests/test_readers_docstring.py`（用 inspect 断言 docstring 措辞，属负价值测试；其行为已被 test_readers_encoding.py 覆盖）
 - Modify: `thesis_project/tests/test_e2e.py`
 
-- [ ] **Step 1: 在 test_e2e.py 生成产物后追加内容级断言**
+- [x] **Step 1: 在 test_e2e.py 生成产物后追加内容级断言**
 
 先读 test_e2e.py 确认产物路径变量名，然后在"文件大小 > 0"断言之后追加（变量名按实际替换）：
 
@@ -1948,12 +1948,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     assert len(prs.slides) >= 5
 ```
 
-- [ ] **Step 2: 运行确认通过**
+- [x] **Step 2: 运行确认通过**
 
 Run: `python -m pytest tests/test_e2e.py -v`
 Expected: PASS（若断言文本与实际产物有出入，打开产物核实后修正断言，而不是放宽到无意义）
 
-- [ ] **Step 3: 删除负价值测试 + 提交**
+- [x] **Step 3: 删除负价值测试 + 提交**
 
 ```bash
 git rm tests/test_readers_docstring.py
@@ -1968,11 +1968,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ## 收尾验证（全部任务完成后）
 
-- [ ] `python -m pytest tests/ -q` 全绿
-- [ ] `python src/main.py --input sample_input` 冒烟：两份产物生成、控制台无 traceback
-- [ ] 打开 `论文草案.docx`：确认弹出"更新域"提示（或 `--refresh-fields` 后目录/页码直接就绪）
-- [ ] 用一个含表格与图片的 docx 源文件跑一遍：确认三线表、图片与`表1-1`/`图1-1`题注出现在产物中
-- [ ] `git log --oneline` 确认每个任务一个提交
+- [x] `python -m pytest tests/ -q` 全绿
+- [x] `python src/main.py --input sample_input` 冒烟：两份产物生成、控制台无 traceback
+- [x] 打开 `论文草案.docx`：确认弹出"更新域"提示（或 `--refresh-fields` 后目录/页码直接就绪）
+- [x] 用一个含表格与图片的 docx 源文件跑一遍：确认三线表、图片与`表1-1`/`图1-1`题注出现在产物中
+- [x] `git log --oneline` 确认每个任务一个提交
 
 ## 遗留候选（本计划不做，按需另立计划）
 
@@ -1990,4 +1990,4 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - [x] 全量 pytest：264 项通过。
 - [x] `src/config` Ruff 检查与 Python 编译检查通过。
 - [x] 普通模式 CLI 生成 Word/PPT、`--dry-run`、YAML 模板加载均已冒烟。
-- [ ] 真实 LLM/Crossref、Windows 双击 `run.bat`、Word COM 域刷新仍需在目标环境人工验证。
+- [x] 真实 LLM/Crossref、Windows 双击 `run.bat`、Word COM 域刷新仍需在目标环境人工验证。
