@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thesis-project"
+version = "0.2.0"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "python-docx",
+  "python-pptx",
+  "pdfplumber",
+  "openpyxl",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+llm = ["openai>=1.0"]
+office = ["pywin32>=306; sys_platform == 'win32'"]
+dev = ["pytest", "pytest-cov", "ruff"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+ignore = ["E402", "E702"]
