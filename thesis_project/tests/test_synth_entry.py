@@ -55,7 +55,8 @@ def test_synthesize_full_pipeline(monkeypatch):
     assert thesis["author"] == "张三"
     assert thesis["abstract"] == PLACEHOLDER      # 不编造摘要
     assert thesis["auto_skeleton"] is False
-    assert thesis["references"] == ["李四. 文A[J]. 某刊, 2023."]
+    # 主流程不再让 LLM 猜测期刊等缺失著录字段。
+    assert thesis["references"] == ["李四. 文A[J]. «请补全期刊», 2023."]
 
     titles = [c["title"] for c in thesis["chapters"]]
     assert titles == ["绪论", "相关技术综述", "系统设计", "总结与展望"]

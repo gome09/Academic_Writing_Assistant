@@ -30,6 +30,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.format_spec import REFS_SPEC
 from src.llm_enhancer import AI_MARK, _chat_json
 from src.organizer import PLACEHOLDER, _node
+from src.references import (entry_from_card, extract_local_metadata,
+                            format_gbt, lookup_crossref, validate_citations)
 
 _VALID_KINDS = {"intro", "review", "core", "conclusion"}
 _MEDIA_TYPES = ("xlsx", "csv", "image")
@@ -98,6 +100,7 @@ def make_cards(ref_docs: list) -> list:
     cards = []
     for d in ref_docs:
         name = os.path.basename(d["source"])
+        local = extract_local_metadata(d)
         try:
             data = _chat_json(
                 _CARD_SYS,
@@ -108,22 +111,24 @@ def make_cards(ref_docs: list) -> list:
             if not isinstance(data, dict):
                 raise ValueError("摘要卡结果不是 JSON 对象")
             cards.append({
-                "title": str(data.get("title") or name).strip(),
-                "authors": [str(a).strip() for a in data.get("authors") or []
+                "title": str(local.get("title") or data.get("title") or name).strip(),
+                "authors": local.get("authors") or
+                           [str(a).strip() for a in data.get("authors") or []
                             if str(a).strip()],
-                "year": str(data.get("year") or "").strip(),
+                "year": str(local.get("year") or data.get("year") or "").strip(),
                 "topic": str(data.get("topic") or "").strip(),
                 "method": str(data.get("method") or "").strip(),
                 "conclusion": str(data.get("conclusion") or "").strip(),
                 "quotes": [str(q).strip() for q in data.get("quotes") or []
                            if str(q).strip()],
                 "source": name,
+                "_local_meta": local,
             })
         except Exception as e:  # noqa: BLE001
             _note_degrade(f"《{name}》摘要卡", e)
             cards.append({"title": name, "authors": [], "year": "",
                           "topic": "", "method": "", "conclusion": "",
-                          "quotes": [], "source": name,
+                          "quotes": [], "source": name, "_local_meta": local,
                           "fallback_text": _doc_text(d, limit=500)})
     return cards
 
@@ -217,19 +222,32 @@ def _material_paras(ch: dict, cards: list) -> list:
     return paras
 
 
-def write_review(ch: dict, topic: dict, cards: list) -> list:
+def write_review(ch: dict, topic: dict, cards: list, validate=False) -> list:
     """综述章 -> 正文段落列表（每段带 AI_MARK）；失败退素材摘录。"""
     briefs = [_card_brief(i + 1, cards[i]) for i in ch["cards"]]
     try:
-        data = _chat_json(
-            _REVIEW_SYS,
-            '请以 JSON 输出 {"paras": ["段落1", "段落2"]}。\n'
-            f"论文题目：{topic['title']}\n章节标题:{ch['title']}\n\n"
-            "文献摘要卡：\n" + "\n".join(briefs))
+        prompt = ('请以 JSON 输出 {"paras": ["段落1", "段落2"]}。\n'
+                  f"论文题目：{topic['title']}\n章节标题:{ch['title']}\n\n"
+                  "文献摘要卡：\n" + "\n".join(briefs))
+        data = _chat_json(_REVIEW_SYS, prompt)
         paras = [str(p).strip() for p in (data.get("paras") or [])
                  if str(p).strip()] if isinstance(data, dict) else []
         if not paras:
             raise ValueError("综述结果没有段落")
+        if validate:
+            issues = validate_citations(paras, {i + 1 for i in ch["cards"]},
+                                        len(cards))
+            if issues:
+                retry = _chat_json(
+                    _REVIEW_SYS,
+                    prompt + "\n\n上次输出存在以下引用错误，请修正后重新输出："
+                    + "；".join(issues))
+                paras = [str(p).strip() for p in (retry.get("paras") or [])
+                         if str(p).strip()] if isinstance(retry, dict) else []
+                issues = validate_citations(
+                    paras, {i + 1 for i in ch["cards"]}, len(cards))
+                if not paras or issues:
+                    raise ValueError("；".join(issues) or "纠正后没有综述段落")
         return [f"{p} {AI_MARK}" for p in paras]
     except Exception as e:  # noqa: BLE001
         _note_degrade(f"《{ch['title']}》综述", e)
@@ -285,10 +303,13 @@ def _raw_references(cards: list) -> list:
             for c in cards]
 
 
-def format_references(cards: list) -> list:
+def format_references(cards: list, strict=False) -> list:
     """摘要卡 -> GB/T 7714 条目列表（顺序即 [n] 引用编号）；失败罗列标题。"""
     if not cards:
         return []
+    if strict:
+        return [format_gbt(entry_from_card(c, c.get("_local_meta")))
+                for c in cards]
     payload = [{"title": c["title"], "authors": c.get("authors", []),
                 "year": c.get("year", ""), "source": c["source"]}
                for c in cards]
@@ -381,7 +402,8 @@ def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
 # ---------------------------------------------------------------------------
 #  总入口
 # ---------------------------------------------------------------------------
-def synthesize(topic_doc: dict, ref_docs: list) -> dict:
+def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
+               cache_path=None) -> dict:
     """参考资料 -> thesis dict（与 organizer.organize 同构，仅 Word 用）。"""
     del _degraded[:]
     topic = parse_topic(topic_doc)
@@ -390,6 +412,31 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
 
     print(f"  文献 {len(text_docs)} 篇，数据/截图 {len(media_docs)} 个")
     cards = make_cards(text_docs)
+    if lookup_metadata:
+        for card in cards:
+            try:
+                hit = lookup_crossref(card.get("title", ""),
+                                      card.get("_local_meta", {}).get("doi", ""),
+                                      cache_path)
+                if not hit:
+                    continue
+                if hit.get("author") and not card.get("authors"):
+                    card["authors"] = [" ".join(filter(None, (a.get("family"),
+                                                               a.get("given"))))
+                                       for a in hit["author"]]
+                card["journal"] = (hit.get("container-title") or [""])[0]
+                card["volume"] = hit.get("volume", "")
+                card["issue"] = hit.get("issue", "")
+                card["pages"] = hit.get("page", "")
+                card["doi"] = hit.get("DOI", "")
+                local = card.setdefault("_local_meta", {})
+                local.setdefault("title", (hit.get("title") or [""])[0])
+                local.setdefault("doi", hit.get("DOI", ""))
+                if not local.get("year"):
+                    parts = hit.get("published", {}).get("date-parts", [[]])
+                    local["year"] = str(parts[0][0]) if parts and parts[0] else ""
+            except Exception as e:  # noqa: BLE001
+                _note_degrade(f"《{card.get('title', '')}》Crossref 元数据", e)
     img_notes = describe_images(media_docs)
     outline = build_outline(topic, cards, img_notes)
 
@@ -399,7 +446,8 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
         ch["kind"] = spec_ch["kind"]
         if spec_ch["kind"] == "review":
             ch["paras"].append("【提示】" + REFS_SPEC["review_notice"])
-            ch["paras"].extend(write_review(spec_ch, topic, cards))
+            ch["paras"].extend(write_review(spec_ch, topic, cards,
+                                             validate=True))
         chapters.append(ch)
 
     plain = [spec_ch for spec_ch in outline if spec_ch["kind"] != "review"]
@@ -419,7 +467,8 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
         ch["paras"].append(PLACEHOLDER)
 
     attach_media(chapters, media_docs, img_notes)
-    references = format_references(cards)
+    reference_entries = [entry_from_card(c, c.get("_local_meta")) for c in cards]
+    references = [format_gbt(entry) for entry in reference_entries]
 
     if _degraded:
         print(f"  [提示] 本次共 {len(_degraded)} 步降级，请检查上方告警。")
@@ -433,4 +482,6 @@ def synthesize(topic_doc: dict, ref_docs: list) -> dict:
         "chapters": chapters,
         "auto_skeleton": False,
         "references": references,
+        "reference_entries": reference_entries,
+        "degraded_steps": list(_degraded),
     }

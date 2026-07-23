@@ -61,7 +61,8 @@ def test_e2e_refs_mode_generates_word_only(refs_input, tmp_path, monkeypatch):
     assert "基于X的Y系统" in text
     assert "相关技术综述" in text
     assert "<AI生成，请核对>" in text
-    assert "李四. 文A[J]. 某刊, 2023." in text
+    assert "李四. 文A[J]. «请补全期刊», 2023." in text
+    assert "某刊" not in text                 # 不接受 LLM 编造的期刊字段
     assert len(doc.tables) >= 1                        # csv 表格已插入
 
 
