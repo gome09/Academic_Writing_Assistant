@@ -1,10 +1,18 @@
 # 健壮性修复 + 图表保真 + LLM 加固 实施计划
 
+> **实施状态更新（2026-07-23）**：本计划的稳定性、媒体、LLM、域更新和 PPT
+> 结构校验任务已完成。后续增量实现又加入了章节有序 `blocks`、附录保留、PPT
+> 媒体自动版式、YAML 格式模板、LLM 外发确认、确定性参考文献和运行报告。
+> 本文中的任务步骤与旧行号是历史实施记录，当前入口和用法以
+> [thesis_project/README.md](../../../thesis_project/README.md) 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 修复个人日常使用中最高频的翻车点（文件占用、扫描 PDF、手工排版标题、摘要误判），让源文件中的表格/图片真实进入 Word 草案，加固 LLM 层（超时/JSON mode/批量化/键归一化），并补上演讲备注、域自动更新与 PPT 结构校验。
 
-**Architecture:** 不引入新框架，沿现有四层管道（readers → organizer → builders，llm_enhancer 旁路增强）就地改进。表格/图片以章节树新增 `tables`/`images` 键的方式传递（`paras` 保持纯字符串，避免波及 PPT/LLM 消费方）；Word 域刷新用可选的 win32com 后处理模块，缺 pywin2/Word 时优雅降级。
+**Architecture:** 沿现有四层管道（readers → organizer → builders，llm_enhancer 旁路增强）
+就地改进。当前章节以有序 `blocks` 为规范模型，`tables`/`images`/`paras` 保留为兼容视图；
+Word 域刷新用可选的 win32com 后处理模块，缺 pywin32/Word 时优雅降级。
 
 **Tech Stack:** Python 3.13、python-docx、python-pptx、pdfplumber、openai>=1.0、pytest；可选 pywin32（仅 Windows 域刷新/导 PDF）。
 
@@ -1884,6 +1892,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ### Task 17: 标注 format_spec 未落实字段 + README 对齐
 
+> **回顾修订（2026-07-23）**：本任务原始清单中的 `page.size`、
+> `page.orientation`、`layout.max_lines_per_bullet`、`layout.content_max_ratio`
+> 和 `layout.text_align` 已接入生成流程，并支持 YAML 覆盖；下列内容保留为当时
+> 的实施步骤，当前状态以 README 和 `config/template.py` 为准。
+
 **Files:**
 - Modify: `thesis_project/config/format_spec.py`
 - Modify: `thesis_project/README.md`
@@ -1891,12 +1904,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - [ ] **Step 1: 给未被代码读取的字段加行尾注释 `# 暂未落实`**
 
 逐项核对（Task 8/16 完成后 `figure`/`table`/`structure` 已激活，无需标注）：
-- `WORD_SPEC`：`page.size`、`page.orientation`（页面尺寸在 docx_builder.py:71-72 硬编码）、`headings.*.outline_level`、`toc.leader`、`toc.page_number_align`、`reference.standard`
-- `PPT_SPEC`：`slide.ratio`、`font.max_font_kinds`、`layout.max_lines_per_bullet`、`layout.content_max_ratio`、`layout.text_align`、`layout.background`、`principle.talk_minutes`、`principle.rule`、`principle.narrative`
+- `WORD_SPEC`：`headings.*.outline_level`、`toc.leader`、`toc.page_number_align`、`reference.standard`
+- `PPT_SPEC`：`slide.ratio`、`font.max_font_kinds`、`layout.background`、`principle.talk_minutes`、`principle.rule`、`principle.narrative`
 
 - [ ] **Step 2: README"自定义"一节补一句**
 
-"个别标注`# 暂未落实`的字段目前仅作文档参考，修改不会影响产物。"
+"仍标注`# 暂未落实`的字段目前仅作文档参考；已经接入生成器的字段可通过 YAML 模板生效。"
 
 - [ ] **Step 3: 全量测试 + 提交**
 
@@ -1964,12 +1977,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## 遗留候选（本计划不做，按需另立计划）
 
 1. **PPT 模板填充引擎**（`--template xxx.pptx`，复制学校模板原生页替换内容）——参考 PPTAgent、thesis-defense-pptx-skill 的路线，工作量大，值得单独规划。
-2. **GB/T 7714 参考文献自动格式化**——citeproc-py + zotero-chinese CSL 样式，需引入结构化文献输入格式。
+2. **高级 GB/T 7714 CSL 排版**——当前已提供离线确定性 formatter；如需 citeproc-py /
+   Zotero 中文 CSL 样式，可另立计划升级著录规则。
 3. **`--check-only` 格式/内容检查器**——规则集外置 YAML、分级输出，参考 thesis-format-checker。
 4. **PDF 页眉页脚噪声过滤**（按坐标裁掉页面顶/底 5% 或去除每页重复行）与英文断词连字符合并。
 5. **多文件输入同名章节合并** + README 说明按文件名排序。
 6. **封面元信息透传**（学院/专业/指导教师经 frontmatter 进封面）。
 7. **复杂 PDF 可选接入 MinerU/marker** 输出结构化 Markdown。
 
+## 2026-07-23 验收补充
 
-
+- [x] 全量 pytest：265 项通过。
+- [x] `src/config` Ruff 检查与 Python 编译检查通过。
+- [x] 普通模式 CLI 生成 Word/PPT、`--dry-run`、YAML 模板加载均已冒烟。
+- [ ] 真实 LLM/Crossref、Windows 双击 `run.bat`、Word COM 域刷新仍需在目标环境人工验证。

@@ -59,14 +59,21 @@ python src/main.py --output 某输出目录          # 自定义输出目录
 python src/main.py --llm                       # 用 LLM 增强草稿质量（可选）
 python src/main.py --refresh-fields            # 生成后用本机 Word 刷新目录/页码域
 python src/main.py --pdf                       # 刷新域并导出 PDF（隐含 --refresh-fields）
+python src/main.py --dry-run                   # 只检查输入与外发清单
+python src/main.py --llm --yes                 # 非交互环境确认 LLM 外发
+python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
+python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
 ```
 
 > **Windows 提示**：请用 `python`（不要用 `python3`，它可能是应用商店占位程序）。
 > 脚本已自动把控制台切到 UTF-8，中文不会乱码。
 
-依赖：`python-docx`、`python-pptx`、`pdfplumber`（读 PDF）；`openai`（仅 --llm 需要）。
+依赖：`python-docx`、`python-pptx`、`pdfplumber`、`openpyxl`、`PyYAML`；
+`openai` 仅在 LLM 模式需要，`pywin32` 仅在 Word 域刷新/PDF 导出时需要。
 ```bash
-pip install python-docx python-pptx pdfplumber
+pip install -r requirements.lock
+pip install -r requirements-llm.lock       # 可选：LLM
+pip install -r requirements-office.txt     # 可选：Word COM
 ```
 
 ---
@@ -102,6 +109,12 @@ PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档�
 原则：LLM 只做整理/提炼/翻译/分类，不扩写正文；AI 生成的内容带
 `<AI生成，请核对>` 标记；任一步失败自动回退纯规则结果，主流程不受影响。
 
+启用 LLM 时程序会先显示端点主机、文件数量、文本规模和图片数量。交互终端
+需确认后才发送；CI/脚本等非交互环境必须显式传 `--yes`。`--dry-run` 永不
+调用外部服务。原始资料会作为不可信输入包裹，LLM 输出仍会经过本地结构、
+长度和引用编号校验。运行详情写入 `output/运行报告.json`，警告日志写入
+`output/运行日志.log`。
+
 > ☆ **如何定位 AI 生成内容**：检索 `<AI生成，请核对>` 即可一次性找到题目、摘要、英文摘要、英文关键词等全部 LLM 输出位置。
 
 
@@ -122,12 +135,15 @@ python src/main.py --llm
 截图（png/jpg），双击 `run.bat` 即自动进入本模式：
 
 - LLM 生成：文献综述章节（带 [n] 引用）、全文大纲、核心章节【写作要点】
-  与素材摘录、GB/T 7714 参考文献表；
+  与素材摘录；参考文献优先使用本地元数据确定性生成 GB/T 7714，缺失字段
+  保留 `«请补全»`，不会让 LLM 猜测；
 - LLM 不生成：研究设计/实现/实验等核心章节正文——留 `<请填写>` 由你完成；
 - 只生成 `论文草案.docx`，不生成 PPT（补完正文后用普通模式再生成）；
 - xlsx/csv 自动插表、截图自动插图；设置 `LLM_VISION_MODEL`（如 qwen-vl-plus）
   后截图还会获得图题建议与内容摘要；
 - **必须**设置 `LLM_API_KEY`（见上节），未设置会报错退出；
+- 默认不查询外部文献数据库；只有传 `--lookup-metadata` 才会访问 Crossref，
+  查询结果缓存于 `.cache/reference_metadata.json`；
 - `--mode refs|draft` 可强制指定模式，覆盖自动检测。
 
 > ⚠ 学术诚信：综述正文全部带 `<AI生成，请核对>` 标记，属于初稿素材，
@@ -156,5 +172,19 @@ python src/main.py --llm
 ## 自定义
 
 改 `config/format_spec.py` 里的 `WORD_SPEC` / `PPT_SPEC` 常量即可全局调整字号、
-页边距、行距、配色、PPT 结构段，无需改动生成逻辑。
-个别标注 `# 暂未落实` 的字段目前仅作文档参考，修改不会影响产物。
+页边距、行距、配色、PPT 结构段；也可用 YAML 深度覆盖：
+
+```yaml
+word:
+  page:
+    orientation: landscape
+ppt:
+  sizes:
+    body_pt: 22
+```
+
+运行：`python src/main.py --format-template format.yml`。未知字段、类型错误和
+负数尺寸会在生成前直接报错。
+`format_spec.py` 中仍标注 `# 暂未落实` 的字段仅作文档参考，修改不会影响产物；
+已经接入生成器的字段（如页面方向、PPT 内容比例、媒体分页等）可通过 YAML
+模板或配置文件生效。

@@ -3,6 +3,11 @@
 日期：2026-07-22
 状态：已与用户逐节确认
 
+> **当前实现更新（2026-07-23）**：参考资料模式已实现并在原设计上增加了有序章节
+> `blocks`、附录保留、确定性参考文献格式化、引用校验、运行报告、`--dry-run`/
+> `--yes` 外发确认、Crossref 显式查询和 YAML 格式模板。本文保留为原始设计记录；
+> 与当前实现不一致之处以 [README](../../../thesis_project/README.md) 和源码为准。
+
 ---
 
 ## 1. 背景与目标
@@ -59,7 +64,8 @@ frontmatter 里的 `author` 写入 thesis["author"]（无则占位符）。
 ## 3. 架构
 
 方案（用户已确认）：**扩展现有管道 + 新增 synthesizer 模块**，与 organizer
-平级；thesis 数据模型不变，docx_builder / pptx_builder 零改动。
+平级；thesis 保持旧字段兼容，同时章节新增规范化 `blocks`，Word/PPT 构建器按
+兼容适配层消费。
 
 ```
 thesis_project/
@@ -84,7 +90,8 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
       ② 题目 + 全部摘要卡 → 论文大纲（LLM），并标注各章关联的摘要卡
       ③ 综述章节撰写（LLM，逐章）：基于关联摘要卡生成正文，引用处标 [n]
       ④ 核心研究章节（LLM，批量）：生成【写作要点】+ 素材摘录 + <请填写>
-      ⑤ 参考文献表（LLM，批量）：摘要卡元数据 → GB/T 7714 条目，编号与 ③ 对应
+      ⑤ 参考文献表（本地确定性 formatter）：本地元数据 → GB/T 7714 条目；缺失字段
+         保留 `«请补全…»`，不让 LLM 猜测
       ⑥ 媒体挂载（纯规则）：xlsx 表格、截图按语义就近挂到大纲章节，
          无法判断时挂到素材附录章
   → thesis dict（与 organizer 输出同构）→ 现有 docx_builder.build
@@ -108,10 +115,10 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
 | ② 大纲 | 1 次 | 题目全文 + 各摘要卡标题/主题行 |
 | ③ 综述 | 每综述章 1 次 | 仅该章关联的摘要卡 |
 | ④ 写作要点 | 1 次批量 | 大纲 + 摘要卡主题 |
-| ⑤ 参考文献 | 1 次批量 | 摘要卡元数据 |
+| ⑤ 参考文献 | 0 次（本地 formatter） | 本地元数据；可选 Crossref 查询 |
 | 视觉理解 | 每张截图 1 次（仅当 `LLM_VISION_MODEL` 已设置） | 图片 base64 |
 
-- 10 篇文献 + 5 张截图 ≈ 18 次调用；temperature 沿用 0.2。
+- 10 篇文献 + 5 张截图约 17 次调用；参考文献格式化不调用 LLM，temperature 沿用 0.2。
 - 所有文本调用经 `llm_enhancer._chat`（既有网络出口，测试打桩点，synthesizer 复用
   `_chat_json`）；视觉调用经 `llm_vision._chat_vision`（第二个网络出口，同样可打桩）。
   JSON 解析统一由 `llm_enhancer._parse_json` 承担并被 `llm_vision` 复用。
@@ -124,7 +131,7 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
 - **逐篇容错**：单篇摘要卡失败 → 该篇退化为首段截断文本卡；xlsx 损坏/加密、
   图片格式不支持 → 跳过并告警（沿用 `read_dir` 惯例）。
 - **步骤降级**：大纲失败 → `DEFAULT_CHAPTERS` 标准骨架；单个综述章失败 →
-  该章留素材摘录+占位符；参考文献格式化失败 → 罗列原始标题行。
+  该章留素材摘录+占位符；本地参考文献字段缺失 → 输出 `«请补全…»`。
 - **视觉失败** → 仅插图，不阻塞。
 - 每次降级打印 `[LLM告警]`，结束时汇总（"N 步降级，请检查"）。全部降级仍
   产出结构完整的 Word（骨架+素材摘录），退出码 0。
@@ -151,4 +158,12 @@ input\（topic 文件 + PDF/docx/md/txt/json/xlsx/csv/图片）
 - 不写核心研究章节正文（学术诚信边界，用户已确认）。
 - refs 模式不生成 PPT（含开题 PPT）。
 - 不做本地 OCR。
-- 不做文献去重/查重、期刊元数据联网检索（DOI/CrossRef）。
+- 默认不做期刊元数据联网检索；传 `--lookup-metadata` 时才允许 Crossref 查询，
+  查询结果缓存到 `.cache/reference_metadata.json`。
+
+## 9. 当前数据模型补充
+
+- Document 仍以 `blocks` 保持读取顺序；章节节点新增规范化 `blocks`，每块携带
+  `kind/source/source_index` 和文本、表格或图片载荷。
+- `paras/tables/images` 作为兼容视图保留，旧测试夹具和手工构造 thesis 仍可被构建器消费。
+- 附录章节使用 `section_role: appendix`，在参考文献后输出，不计入正文章号。

@@ -1,18 +1,27 @@
 # 参考资料 → 论文初稿（研究写作辅助）实施计划
 
-> **状态：✅ 已完成（2026-07-22）** —— 17 个任务全部实施并合并回 main（合并前 HEAD `20124ee`，共 18 个提交）。
+> **状态：✅ 已完成（2026-07-23）** —— 原 17 个任务已完成；后续兼容迁移、引用可信度、
+> PPT 媒体、模板和工程化增强也已实施。
 > 执行方式：subagent-driven development（每任务独立实现子代理 + 规格/质量双重审查），全程 TDD。
-> 测试：191 → **257 全部通过**（新增 12 个测试文件）。最终整体审查结论：Ready to merge。
+> 测试：191 → **265 全部通过**（包含内容顺序、严格引用和 YAML 模板回归）。
+> `src/config` Ruff 检查与 Python 编译检查通过。
 >
 > **实施中新增的计划外修复：** `42a266f` —— `synthesize()` 原按 `by_title` 字典派发核心章内容，LLM 大纲返回重复章标题时会导致前一节点空、后一节点内容加倍；改为 `zip(outline, chapters)` 位置索引并补回归测试（质量审查发现）。
 >
-> **验证清单遗留（需人工）：** 第 4 项（真实 API Key 的 refs 模式冒烟）与第 5 项（Windows 双击 run.bat 全程）离线环境无法执行，其余 1-3 项已验证通过。
+> **仍需人工验证：** 真实 LLM/Crossref 请求、Windows 双击 `run.bat`、Word COM 域刷新；
+> 自动化 dry-run、模板加载、普通模式产物和打桩 refs 全流程已验证。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 新增"参考资料模式"：`input\` 放题目文件 + 参考文献/Excel/截图时，LLM 生成带文献综述、大纲、写作要点与 GB/T 7714 参考文献表的 `论文草案.docx`（不写核心研究章节正文，不生成 PPT）。
 
-**Architecture:** 扩展 readers（xlsx/csv/图片）；新建 `synthesizer.py` 作为 organizer 的平级替代品，输出与现有完全同构的 thesis dict，docx_builder/pptx_builder 零改动；新建 `llm_vision.py` 承载视觉调用；main.py 按 topic 文件自动分流，`--mode` 可覆盖。
+**Architecture:** 扩展 readers（xlsx/csv/图片）；新建 `synthesizer.py` 作为 organizer 的平级替代品，
+并通过章节 `blocks` 与旧 `paras/tables/images` 适配层连接 Word/PPT 构建器；
+`llm_vision.py` 承载视觉调用；main.py 按 topic 文件自动分流，`--mode` 可覆盖。
+
+**后续实现补充：** 参考文献主流程已改为本地元数据优先的确定性 formatter；缺失字段
+保留 `«请补全…»`。只有传 `--lookup-metadata` 才查询 Crossref。LLM 启用前支持
+`--dry-run` 预览外发清单，非交互环境必须传 `--yes`。
 
 **Tech Stack:** Python 3.13、python-docx、pdfplumber、openai>=1.0、openpyxl（新增）、pytest。
 
@@ -2115,7 +2124,6 @@ git commit -m "docs: document refs mode; add openpyxl to run.bat deps"
 - **read_only 模式的 openpyxl**：合并单元格非锚点读 None；公式未缓存值读 None——
   均落为空串，文档字符串已注明。
 - **`--only` 在 refs 模式下被忽略**（refs 只产 Word），不报错；README 已说明模式差异。
-
 
 
 

@@ -18,4 +18,5 @@ dist/
 .DS_Store
 thesis_project/output/
 thesis_project/input/
+thesis_project/.cache/
 .worktrees/
