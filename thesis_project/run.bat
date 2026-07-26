@@ -51,7 +51,7 @@ set "INPUT=input"
 dir /b /a-d "input\*" >nul 2>nul
 if errorlevel 1 (
     echo [信息] input\ 为空，改用 sample_input\ 示例演示。
-    echo         ^(把你的 Word/PDF/TXT/md/json 放进 input\ 后重跑即可^)
+    echo         ^(把 Word/PDF/TXT/Markdown/JSON/Excel/图片放进 input\ 后重跑即可^)
     set "INPUT=sample_input"
 ) else (
     echo [信息] 读取 input\ 下的源文件。
@@ -66,10 +66,8 @@ echo.
 
 if "%RC%"=="0" (
     echo ============================================================
-    echo   完成！草案已生成到 output\ 目录：
-echo     - output\论文草案.docx
-echo     - output\答辩PPT草案.pptx
-echo     - output\运行报告.json / 运行日志.log
+    echo   完成！请查看 output\ 目录中的实际产物与运行报告。
+    echo   普通模式通常生成 Word + PPT；参考资料模式只生成 Word。
     echo   提示：Word 打开后按提示更新域（或按 F9 更新目录）；替换 ^<请填写^> 占位符。
     echo ============================================================
     REM 自动打开 output 目录

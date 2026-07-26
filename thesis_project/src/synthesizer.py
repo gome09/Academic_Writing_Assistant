@@ -5,7 +5,7 @@
 输入：题目 Document + 参考资料 Document 列表
 输出：与 organizer.organize() 完全同构的 thesis dict（docx_builder 直接消费）
 
-管道（见 docs/superpowers/specs/2026-07-22-refs-to-draft-design.md）：
+管道（总体架构见 docs/ARCHITECTURE.md）：
   ① make_cards       逐篇文献 -> 摘要卡（逐篇容错）
   ② build_outline    题目 + 摘要卡 -> 章节大纲（失败退 REFS_SPEC 默认骨架）
   ③ write_review     综述章正文（带 [n] 引用与 AI 标记；失败留素材+占位）

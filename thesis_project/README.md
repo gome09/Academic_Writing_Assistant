@@ -6,7 +6,7 @@
 
 > 定位：**草案**。产物已套好格式与结构骨架，正文与 `<请填写>` 占位符需人工润色。
 
-> 实施进度：[`docs/superpowers/plans/2026-07-17-organizer-fixes-and-llm-enhancer.md`](../docs/superpowers/plans/2026-07-17-organizer-fixes-and-llm-enhancer.md)
+> 当前架构、数据流与维护边界见 [架构说明](../docs/ARCHITECTURE.md)。
 
 
 ---
@@ -59,7 +59,7 @@ thesis_project/
 python src/main.py --input sample_input
 
 # 2) 放入自己的文件后正式生成
-#    把 Word/PDF/TXT/md/json 放进 input/，然后：
+#    把 Word/PDF/TXT/Markdown/JSON/Excel/图片 放进 input/，然后：
 python src/main.py
 
 # 其它用法
@@ -67,10 +67,11 @@ python src/main.py --input a.pdf b.md 某目录   # 指定若干文件/目录
 python src/main.py --only word                 # 只生成 Word
 python src/main.py --only ppt                  # 只生成 PPT
 python src/main.py --output 某输出目录          # 自定义输出目录
+python src/main.py --mode refs                 # 强制参考资料模式（draft 强制普通草案模式）
 python src/main.py --llm                       # 用 LLM 增强草稿质量（可选）
 python src/main.py --refresh-fields            # 生成后用本机 Word 刷新目录/页码域
 python src/main.py --pdf                       # 刷新域并导出 PDF（隐含 --refresh-fields）
-python src/main.py --dry-run                   # 只检查输入与外发清单
+python src/main.py --dry-run                   # 检查输入/外发清单并写运行报告，不生成 Word/PPT
 python src/main.py --llm --yes                 # 非交互环境确认 LLM 外发
 python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
@@ -98,7 +99,10 @@ pip install -r requirements-office.txt     # 可选：Word COM
 - **Markdown**：用 `#`/`##` 作章/节标题，YAML frontmatter 写 `title/author/keywords`（见 `sample_input/thesis_draft.md`）。
 - **Word (.docx)**：正文里用「标题 1/标题 2」样式的段落会被识别为章/节。
 - **JSON**：支持 `{title, content, children:[...]}` 递归结构；也支持任意数据（会平铺为段落）。
-- **PDF / TXT**：按空行分段读取（PDF 无显式标题时，会套用标准章节骨架，把内容顺序填入）。
+- **PDF**：按页面文本行重组段落并识别编号标题；扫描版 PDF 没有文本层时会明确报错。
+- **TXT**：按空行分段读取；无显式标题时会套用标准章节骨架并保持原文顺序。
+- **Excel（.xlsx / .csv）**：读取为表格内容；非空工作表会分别成为表格块。
+- **图片（.png / .jpg / .jpeg / .bmp / .webp）**：读取为图片内容；可随 Word/PPT 草案一起排版。
 
 识别不到的字段（题目、作者、英文摘要等）会留 `<请填写>` 占位符，方便你搜索替换。
 
@@ -146,8 +150,8 @@ python src/main.py --llm
 
 ## 参考资料模式（题目 + 文献 → 论文初稿骨架）
 
-`input\` 里放一个**题目文件**（`topic.md` / `题目.txt`，写论文题目、研究内容
-简述、拟采用方法）+ 参考文献（PDF/Word/md/txt/json）、数据（xlsx/csv）、
+`input\` 里放一个**题目文件**（`topic.md`、`topic.txt`、`题目.md` 或 `题目.txt`，
+写论文题目、研究内容简述、拟采用方法）+ 参考文献（PDF/Word/md/txt/json）、数据（xlsx/csv）、
 截图（png/jpg），双击 `run.bat` 即自动进入本模式：
 
 - LLM 生成：文献综述章节（带 [n] 引用）、全文大纲、核心章节【写作要点】
@@ -173,12 +177,13 @@ python src/main.py --llm
 - A4；页边距四周 2.5cm + 装订线 1cm；页眉 1.5cm / 页脚 1.75cm
 - 正文：宋体 / Times New Roman、小四(12pt)、固定行距 20 磅、首行缩进 2 字符、两端对齐
 - 标题 1/2/3：黑体 三号(16)/四号(14)/13pt，套用内置样式 → **可自动生成目录**
-- 摘要（小二加粗居中）、关键词、英文摘要、目录域（打开文档后按提示更新域，或按 **F9**）、页码、参考文献(GB/T 7714)
+- 摘要（小二加粗居中）、关键词、英文摘要、目录域（打开文档后按提示更新域，或按 **F9**）、页码
+- 参考文献：普通草案模式保留源条目并编号；参考资料模式按 GB/T 7714 确定性格式化，缺失字段保留占位符
 
 ### PPT（答辩）
 - 16:9；字号层级 封面40 / 分节32 / 页标题30 / 正文24；微软雅黑
 - 结构：封面 → 目录 → 研究背景 → 研究方法 → 研究成果 → 结论展望 → 致谢
-- 白底 + 主色标题条；左对齐；每页要点 ≤ 6；遵循 10/20/30 原则
+- 白底 + 主色标题条；左对齐；每页要点 ≤ 6；总页数与各分区页数超出配置范围时给出告警
 
 规范来源见 `config/format_spec.py` 中的 `SPEC_SOURCES`。
 **各校要求不同，请以本校教务处/学院官方模板为准。**
@@ -199,8 +204,8 @@ ppt:
     body_pt: 22
 ```
 
-运行：`python src/main.py --format-template format.yml`。未知字段、类型错误和
-负数尺寸会在生成前直接报错。
-`format_spec.py` 中仍标注 `# 暂未落实` 的字段仅作文档参考，修改不会影响产物；
+运行：`python src/main.py --format-template format.yml`。未知字段和类型错误会在
+生成前直接报错；尺寸与范围仍应按示例和本校规范填写有效值。
+`format_spec.py` 中仍标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则）仅作文档参考，修改不会影响产物；
 已经接入生成器的字段（如页面方向、PPT 内容比例、媒体分页等）可通过 YAML
 模板或配置文件生效。

@@ -219,7 +219,8 @@ def main():
     print("① 读取源文件")
     docs, errors = gather_docs(args.input)
     if not docs:
-        print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/md/json 放进 input/ 后重试。")
+        print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/Markdown/JSON/Excel/图片"
+              "放进 input/ 后重试。")
         print("  （可先用示例：--input sample_input）")
         return 1
     print(f"  共读取 {len(docs)} 个文件，"
