@@ -21,6 +21,11 @@ thesis_project/input/
 thesis_project/.cache/
 .worktrees/
 
+# 本机 Claude Code 权限配置：含绝对路径，不是项目业务规范
+.claude/settings.local.json
+
+# 下方受管块名为 project-upgrade-maintainer，与当前 skill 的 project-upgrade 不一致，
+# 系有意保留（详见 AGENTS.md「规则作用域说明」）。skill 重跑若追加新块，删新留旧。
 # project-upgrade-maintainer:start
 # Upgrade workflow temporary and generated artifacts
 .upgrade/tmp/*

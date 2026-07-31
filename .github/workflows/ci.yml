@@ -23,4 +23,4 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[dev,llm]"
       - run: python -m pytest
-      - run: python -m ruff check src config
+      - run: python -m ruff check src tests config

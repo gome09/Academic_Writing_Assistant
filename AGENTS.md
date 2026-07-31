@@ -35,7 +35,7 @@
 
 ## 开发环境与命令
 
-- 操作系统基线：Windows；命令示例优先使用 PowerShell。
+- 开发基线：Windows；命令示例优先使用 PowerShell。CI 矩阵同时覆盖 `ubuntu-latest` 与 `windows-latest`，因此不要写只在 Windows 成立的路径分隔符或命令。
 - Python：`>=3.11,<3.14`。
 - 工作目录：运行 Python、pytest 和 ruff 时通常进入 `thesis_project/`。
 - 核心依赖：`requirements.lock`。
@@ -51,7 +51,7 @@ python -m ruff check src tests config
 python src/main.py --help
 ```
 
-修改范围较小时可先运行相关测试，但交付前应尽量运行全量 `python -m pytest`。当前 Ruff 配置的行宽为 100，目标版本为 Python 3.11。
+以上三条即 `.github/workflows/ci.yml` 的门禁内容，本文件是它们的权威表述；`docs/ARCHITECTURE.md` 只作引用，不要在别处演化出第二套命令。修改范围较小时可先运行相关测试，但交付前应尽量运行全量 `python -m pytest`。当前 Ruff 配置的行宽为 100，目标版本为 Python 3.11。
 
 ## 实现约束
 
@@ -82,7 +82,14 @@ python src/main.py --help
 - 不覆盖用户未提交的修改，不清理与当前任务无关的文件。
 - 删除文件前确认其确属冗余、生成物或已被替代，并检查仓库内引用。已跟踪文件应可通过 Git 恢复。
 - 不执行 `git reset --hard`、强制检出、历史改写或自动提交，除非用户明确要求。
-- 依赖变更需同步维护 `pyproject.toml`、相应 `.txt` 文件和锁定文件；不要只修改其中一个来源。
+- 暂存文件仅限用户明确要求时，且必须逐个写出路径；任何情况下都不得使用 `git add .` 或 `git add -A`。
+
+### 规则作用域说明
+
+文末「Upgrade Workflow Guardrails」标记块由 `project-upgrade` 工具维护，其中的硬性禁令（含「不得删除 `.upgrade/` 之外的任何文件」）**只在执行升级工作流期间生效**，不覆盖上面这条通用删除规则。日常开发任务仍按通用规则处理：确认冗余、检查引用、可经 Git 恢复。两者同时适用时以当前任务所处的工作流为准。
+
+该标记块使用的名字是 `project-upgrade-maintainer`，而当前安装的 skill 生成的是 `project-upgrade`。这是**有意保留的偏差**：块内是本项目定制的 guardrails，而 skill 的标准块是一段通用模板；若改名对齐，skill 会按「块存在但过时」的规则用通用模板覆盖掉这些定制内容。代价是 skill 重跑时会因找不到旧名而追加一个通用块——届时请手工删除新追加的块，保留本块。同样的注解见 `CLAUDE.md`。
+- 依赖变更需同步维护 `pyproject.toml`、相应 `.txt` 文件和锁定文件；不要只修改其中一个来源。当前只有核心依赖与 LLM 依赖有 `.lock`（`requirements.lock`、`requirements-llm.lock`），`requirements-office.txt` 没有也不需要 `.lock`。
 
 ## 文档维护
 

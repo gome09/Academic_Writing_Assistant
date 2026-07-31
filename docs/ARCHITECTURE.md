@@ -12,13 +12,15 @@
   -> main.py：自动检测或 --mode 指定
        -> draft：organizer.py -> 可选 llm_enhancer.py -> docx_builder.py / pptx_builder.py
        -> refs： synthesizer.py -> references.py / 可选 llm_vision.py -> docx_builder.py
-  -> runtime_report.py：运行报告
+  -> 可选 postprocess.py：--refresh-fields / --pdf 时用本机 Word 刷新域并导出 PDF
+  -> runtime_report.py：dry-run、成功完成及 draft 构建结果的运行报告
+  -> logging_setup.py：output/运行日志.log（当前仅 pptx_builder.py 写入告警）
 ```
 
 - `auto`：存在 `topic.md`、`topic.txt`、`题目.md` 或 `题目.txt` 时进入 `refs`，否则进入 `draft`。
 - `draft`：生成 Word 与 PPT，可用 `--only` 限制产物；`--llm` 是可选增强。
 - `refs`：要求题目文件、至少一份参考资料和 `LLM_API_KEY`，只生成 Word。
-- `--dry-run`：读取和检查输入，必要时打印 LLM 外发清单并写运行报告，不调用 LLM、不生成 Word/PPT。
+- `--dry-run`：检查文件可读性、模式与外发清单并写运行报告，不调用 LLM/Crossref，也不生成 Word/PPT；它不执行 `refs` 的题目、参考资料和 API 密钥前置校验。
 
 ## 输入模型
 
@@ -29,26 +31,35 @@
 - 表格：`.xlsx`、`.csv`
 - 图片：`.png`、`.jpg`、`.jpeg`、`.bmp`、`.webp`
 
-统一内容块以 `kind` 区分段落、标题、表格和图片。Word 内嵌图片会被提取；PDF 依赖文本层，扫描版 PDF 不做 OCR。
+统一内容块的 `kind` 取值为 `heading`、`paragraph`、`list_item`、`table`、`code`、`image`。Word 内嵌图片会被提取；PDF 依赖文本层，其内嵌图片一律不导入（只打印提示），扫描版 PDF 不做 OCR 并直接报错。`.xlsx` 的每个非空工作表各成一个表格块，`.csv` 整份文件只产出一个表格块。
 
 ## 普通草案管道
 
-`organizer.py` 负责元信息抽取、章节树重建、特殊章节处理、无标题文档骨架回退和 PPT 分区映射。`llm_enhancer.py` 只在显式传入 `--llm` 时参与，并在单步失败时保留规则结果。
+`organizer.py` 负责元信息抽取、章节树重建、特殊章节处理、无标题文档骨架回退和 PPT 分区映射。附录章在此被标记为 `section_role="appendix"`，由 `docx_builder.py` 移到参考文献之后并重编号为「附录A/B…」。`draft` 模式的 LLM 增强步骤只在显式传入 `--llm` 时执行，并在单步失败时保留规则结果；但 `llm_enhancer.py` 模块本身两种模式都会加载——`refs` 用它做前置可用性检查，并复用 `_chat_json` 作为唯一的 LLM 网络出口。
 
-`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖。源码中标为 `暂未落实` 的配置字段不影响产物。
+`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖；`config/template.py` 负责深度合并并对未知字段、类型错误和负数报错。`PPT_SPEC["structure"]` 只供 `pptx_builder.py` 校验分区页数并产生告警，不改变 `organizer.py` 固定生成的分区、顺序或标题。PPT 侧另有硬性截断：表格超过 8 行会由 `organizer.py` 拆页，`pptx_builder.py` 最终只渲染前 8 行 6 列并告警。
+
+`format_spec.py` 中有一批字段当前不被任何构建器消费，修改它们不会影响产物：除标注 `暂未落实` 者外，还包括 `figure.caption_position`（图题恒在图下）、`figure.number_by_chapter` 与 `table.number_by_chapter`（编号恒为 `章-序`）、`table.style`（恒用三线表）。同层的 `table.caption_position` 与 `figure/table.caption_align` 则是真实生效的。
 
 ## 参考资料管道
 
 `synthesizer.py` 是 `refs` 模式的整理入口：
 
 1. 将参考资料逐篇整理为摘要卡；
-2. 生成或回退到章节大纲；
-3. 为综述章节生成带引用标记的初稿；
-4. 为核心章节生成写作要点，不生成核心研究正文；
-5. 由 `references.py` 确定性生成参考文献并校验引用；
-6. 将表格与图片挂载到匹配章节，无法匹配时放入素材附录。
+2. 仅当传入 `--lookup-metadata` 时，逐张摘要卡查询 Crossref 并回填期刊、卷期、页码、DOI；
+3. 生成或回退到章节大纲；
+4. 为综述章节生成带引用标记的初稿；
+5. 为核心章节生成写作要点，不生成核心研究正文；
+6. 将表格与图片挂载到匹配章节，无法匹配时放入素材附录；
+7. 由 `references.py` 确定性生成参考文献并校验引用。
 
-所有 AI 生成正文必须保留 `<AI生成，请核对>` 标记。Crossref 查询默认关闭，仅 `--lookup-metadata` 显式启用，并缓存到 `thesis_project/.cache/reference_metadata.json`。
+只有 `xlsx`、`csv` 和图片三类文档会作为媒体素材参与第 6 步；`docx`、`pdf` 文献只被取用文本，其内嵌图片不会进入 `refs` 产物。
+
+`refs` 的 AI 综述正文和视觉摘要保留 `<AI生成，请核对>` 标记；写作要点不统一附加该标记，仍须人工核对。摘要卡、大纲、综述、写作要点或视觉理解失败时会分别告警并降级，降级步骤写入成功运行的报告。
+
+参考文献的**格式化**过程完全确定性，不交给 LLM。但**元数据来源**有回退链：优先用本地正则抽取的题名/作者/年份（以及 Crossref 回填结果），本地缺失时回退到摘要卡中由 LLM 抽取的同名字段，两者都没有才保留 `«请补全作者»`、`«请补全题名»` 等占位符。
+
+Crossref 查询默认关闭，仅 `--lookup-metadata` 显式启用，并缓存到 `thesis_project/.cache/reference_metadata.json`。
 
 ## 外部依赖与网络边界
 
@@ -58,7 +69,9 @@
 - LLM 网络请求：`llm_enhancer.py` 和 `llm_vision.py`
 - Crossref 网络请求：`references.py`，仅显式启用元数据查询时发生
 
-启用 LLM 时，交互环境需确认外发；非交互环境需 `--yes` 或 `THESIS_LLM_CONSENT=1`。`--dry-run` 不调用任何外部服务。
+启用 LLM 时，交互环境需确认外发；非交互环境需 `--yes` 或 `THESIS_LLM_CONSENT=1`。另有第三条豁免：环境变量 `PYTEST_CURRENT_TEST` 存在时（即 pytest 运行中）确认环节被直接跳过，该变量仅供测试使用，不应在生产环境设置。`--dry-run` 不调用任何外部服务。无可读输入、拒绝外发、`refs` 前置检查失败或 `refs` 的 Word 写盘失败会在运行报告写入前退出。
+
+产物写盘时若目标文件被 Word/WPS 占用，`main.py` 的 `_build_with_retry` 会依次改名重试（`论文草案(2).docx` 等，最多 5 个候选），全部失败才判定构建失败。`draft` 运行报告额外记录逐文件读取失败列表 `read_errors` 与 `pptx_builder` 的告警。报告默认写入 `output/运行报告.json`，可用 `--report` 改路径。
 
 ## 事实来源与验证
 
@@ -73,5 +86,8 @@
 ```powershell
 cd thesis_project
 python -m pytest
+python -m ruff check src tests config
 python src/main.py --help
 ```
+
+以上三条与 `.github/workflows/ci.yml` 的门禁一致；`AGENTS.md` 是同一组命令的权威表述，此处只作引用，不要各自演化出第二套。
