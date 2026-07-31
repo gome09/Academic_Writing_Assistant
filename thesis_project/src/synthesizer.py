@@ -10,12 +10,13 @@
   ② build_outline    题目 + 摘要卡 -> 章节大纲（失败退 REFS_SPEC 默认骨架）
   ③ write_review     综述章正文（带 [n] 引用与 AI 标记；失败留素材+占位）
   ④ write_points     核心章写作要点（批量；失败留占位）
-  ⑤ format_references 摘要卡 -> GB/T 7714（失败罗列原始标题）
+  ⑤ references.py     本地元数据 -> 确定性 GB/T 7714 条目
   ⑥ attach_media     xlsx/csv/截图挂载（纯规则）
 
 原则：
   - LLM 生成综述与要点，不代写核心研究章节正文（学术诚信边界）。
-  - 所有 AI 正文带 AI_MARK；任何步骤降级都记入 _degraded 并汇总打印。
+  - 综述正文和视觉摘要带 AI_MARK；写作要点不统一附加标记，仍需人工核对。
+  - 任何步骤降级都记入 _degraded 并汇总打印。
   - 网络出口复用 llm_enhancer._chat_json / llm_vision._chat_vision，
     测试打桩 synthesizer._chat_json / llm_vision._chat_vision 即可。
 """
@@ -287,45 +288,6 @@ def write_points(chapters: list, topic: dict, cards: list) -> dict:
     except Exception as e:  # noqa: BLE001
         _note_degrade("写作要点", e)
         return {}
-
-
-# ---------------------------------------------------------------------------
-#  ⑤ 参考文献表（GB/T 7714）
-# ---------------------------------------------------------------------------
-_GBT_SYS = (
-    "你是参考文献格式化助手。把给定文献元数据逐条格式化为 GB/T 7714 著录条目，"
-    "严格按输入顺序输出、数量一致。信息缺失处用«请补全»标注，"
-    "禁止编造卷期页码等信息。")
-
-
-def _raw_references(cards: list) -> list:
-    return [f"{c['title']}. «请补全著录信息»（来源文件：{c['source']}）"
-            for c in cards]
-
-
-def format_references(cards: list, strict=False) -> list:
-    """摘要卡 -> GB/T 7714 条目列表（顺序即 [n] 引用编号）；失败罗列标题。"""
-    if not cards:
-        return []
-    if strict:
-        return [format_gbt(entry_from_card(c, c.get("_local_meta")))
-                for c in cards]
-    payload = [{"title": c["title"], "authors": c.get("authors", []),
-                "year": c.get("year", ""), "source": c["source"]}
-               for c in cards]
-    try:
-        data = _chat_json(
-            _GBT_SYS,
-            '请以 JSON 输出 {"references": ["条目1", "条目2"]}：\n'
-            + json.dumps(payload, ensure_ascii=False))
-        refs = [str(r).strip() for r in (data.get("references") or [])
-                if str(r).strip()] if isinstance(data, dict) else []
-        if len(refs) != len(cards):
-            raise ValueError(f"条目数不符：{len(refs)} != {len(cards)}")
-        return refs
-    except Exception as e:  # noqa: BLE001
-        _note_degrade("参考文献格式化", e)
-        return _raw_references(cards)
 
 
 # ---------------------------------------------------------------------------

@@ -36,8 +36,6 @@ def _fake_chat_json_factory():
         if "写作教练" in system:
             return {"绪论": ["交代背景"], "系统设计": ["先画架构图，参考[1]"],
                     "总结与展望": ["概括工作"]}
-        if "参考文献格式化" in system:
-            return {"references": ["李四. 文A[J]. 某刊, 2023."]}
         raise AssertionError("未知提示词: " + system[:20])
     return fake
 
@@ -106,8 +104,6 @@ def _dup_chat_json_factory():
             return {"paras": ["综述正文一[1]。"]}
         if "写作教练" in system:
             return {"系统设计": ["先画架构图，参考[1]"]}
-        if "参考文献格式化" in system:
-            return {"references": ["李四. 文A[J]. 某刊, 2023."]}
         raise AssertionError("未知提示词: " + system[:20])
     return fake
 

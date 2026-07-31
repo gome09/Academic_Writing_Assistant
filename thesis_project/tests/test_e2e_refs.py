@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """参考资料模式端到端：真实文件 -> main() -> 校验生成的 docx。"""
-import os
 import sys
 
 import docx as docx_lib
@@ -38,8 +37,6 @@ def _fake_chat_json(system, user):
         return {"paras": ["综述正文[1]。"]}
     if "写作教练" in system:
         return {"系统设计": ["先画架构图"]}
-    if "参考文献格式化" in system:
-        return {"references": ["李四. 文A[J]. 某刊, 2023."]}
     raise AssertionError("未知提示词")
 
 

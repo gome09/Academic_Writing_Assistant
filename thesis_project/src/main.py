@@ -175,12 +175,25 @@ def _print_llm_transfer_summary(docs):
           f"文本约 {chars} 字符；图片 {images} 张")
 
 
+def _print_draft_completion(outputs):
+    kinds = []
+    if any(str(path).lower().endswith(".docx") for path in outputs):
+        kinds.append("Word")
+    if any(str(path).lower().endswith(".pptx") for path in outputs):
+        kinds.append("PPT")
+    generated = " + ".join(kinds) if kinds else "草案"
+    print(f"完成。已生成 {generated}；生成内容需人工润色，占位符 <请填写> 需补全。")
+    if "Word" in kinds:
+        print("Word 打开时请按提示更新域（或按 F9 更新目录）。")
+
+
 def main():
     ap = argparse.ArgumentParser(description="论文Word草案 + 答辩PPT草案 生成器")
     ap.add_argument("--input", nargs="+", default=[DEFAULT_INPUT],
                     help="输入目录或文件（可多个）")
     ap.add_argument("--output", default=DEFAULT_OUTPUT, help="输出目录")
-    ap.add_argument("--only", choices=["word", "ppt"], help="只生成其中一种")
+    ap.add_argument("--only", choices=["word", "ppt"],
+                    help="draft 模式只生成其中一种")
     ap.add_argument("--mode", choices=["auto", "refs", "draft"],
                     default="auto",
                     help="auto: input/ 有题目文件(topic.md等)时走参考资料模式；"
@@ -191,11 +204,11 @@ def main():
     ap.add_argument("--refresh-fields", action="store_true",
                     help="生成后用本机 Word 静默刷新目录/页码域（需已装 Word 和 pywin32）")
     ap.add_argument("--pdf", action="store_true",
-                    help="刷新域后同时导出 PDF（隐含 --refresh-fields）")
+                    help="生成 Word 时刷新域并导出 PDF（隐含 --refresh-fields）")
     ap.add_argument("--format-template", metavar="FILE",
                     help="从 YAML 文件加载 Word/PPT 格式覆盖")
     ap.add_argument("--dry-run", action="store_true",
-                    help="仅检查输入和 LLM 外发清单，不调用 LLM 或生成产物")
+                    help="仅检查输入可读性、模式和 LLM 外发清单，不调用外部服务或生成产物")
     ap.add_argument("--yes", action="store_true",
                     help="非交互环境确认将资料发送至 LLM 端点")
     ap.add_argument("--lookup-metadata", action="store_true",
@@ -281,7 +294,7 @@ def main():
             ok = False
 
     print("=" * 56)
-    print("完成。请打开草案：Word 打开时按提示更新域（或按 F9 更新目录）；两份均需人工润色占位符 <请填写>。")
+    _print_draft_completion(outputs)
     from src.runtime_report import write_report
     write_report(args.report or os.path.join(args.output, "运行报告.json"),
                  {"status": "ok" if ok else "error", "mode": "draft",

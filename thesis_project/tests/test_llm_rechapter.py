@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from src import llm_enhancer
-from src.organizer import organize, PLACEHOLDER, DEFAULT_CHAPTERS
+from src.organizer import organize, PLACEHOLDER
 from tests.factories import p, doc
 
 

@@ -24,3 +24,20 @@ def test_build_with_retry_gives_up_after_all_locked(tmp_path, capsys):
     result = main_mod._build_with_retry(fake_build, {}, str(tmp_path / "a.docx"))
     assert result is None
     assert "占用" in capsys.readouterr().out
+
+
+def test_draft_completion_only_mentions_generated_ppt(capsys):
+    main_mod._print_draft_completion(["output/答辩PPT草案.pptx"])
+
+    out = capsys.readouterr().out
+    assert "已生成 PPT" in out
+    assert "Word 打开" not in out
+    assert "两份" not in out
+
+
+def test_draft_completion_mentions_word_field_refresh(capsys):
+    main_mod._print_draft_completion(["output/论文草案.docx"])
+
+    out = capsys.readouterr().out
+    assert "已生成 Word" in out
+    assert "F9" in out

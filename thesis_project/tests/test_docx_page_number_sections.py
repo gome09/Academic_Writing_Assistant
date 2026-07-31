@@ -107,7 +107,8 @@ def test_toc_spec_levels_is_three():
 
 def test_toc_field_uses_spec_levels(tmp_path, monkeypatch):
     # spec 值直接决定 TOC 域，不与 headings 数量耦合
-    import zipfile, re
+    import re
+    import zipfile
     monkeypatch.setitem(W["toc"], "levels", 2)
     out = _build(tmp_path)
     with zipfile.ZipFile(out) as z:

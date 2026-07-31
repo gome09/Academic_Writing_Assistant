@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """read_docx 把 Heading 1/2/3 映射到 level 1/2/3 链路。"""
-import os
 from docx import Document
 
 from src.readers import read_docx
