@@ -24,6 +24,11 @@ thesis_project/.cache/
 # 本机 Claude Code 权限配置：含绝对路径，不是项目业务规范
 .claude/settings.local.json
 
+# 升级工作流的内部过程文档（计划/报告/审查/追踪），仅本机保留，不公开发布。
+# 已于 2026-08-06 用 git-filter-repo 从全部历史中移除。
+# 下方受管块中针对 .upgrade/ 子路径的规则因此成为冗余，但受 skill 管理不手工编辑。
+.upgrade/
+
 # 下方受管块名为 project-upgrade-maintainer，与当前 skill 的 project-upgrade 不一致，
 # 系有意保留（详见 AGENTS.md「规则作用域说明」）。skill 重跑若追加新块，删新留旧。
 # project-upgrade-maintainer:start
