@@ -74,6 +74,7 @@ python src/main.py --only ppt                  # draft 模式只生成 PPT
 python src/main.py --output 某输出目录          # 自定义输出目录
 python src/main.py --mode refs                 # 强制参考资料模式（draft 强制普通草案模式）
 python src/main.py --llm                       # 用 LLM 增强草稿质量（可选）
+python src/main.py --polish standard           # 正文多轮润色（conservative/standard/strong，需 LLM_API_KEY）
 python src/main.py --refresh-fields            # 生成后用本机 Word 刷新目录/页码域
 python src/main.py --pdf                       # 生成 Word 时刷新域并导出 PDF（隐含 --refresh-fields）
 python src/main.py --dry-run                   # 检查可读性/模式/外发清单并写报告，不调用外部服务或生成草案
@@ -125,11 +126,19 @@ pip install -r requirements-office.txt     # 可选：Word COM
 | `LLM_TIMEOUT` | 否 | 单步超时秒数，默认 60 |
 | `LLM_VISION_MODEL` | 否 | 图片理解模型（如 qwen-vl-plus），refs 模式为截图生成图题与摘要 |
 | `THESIS_LLM_CONSENT` | 否 | 设为 `1` 等效 `--yes`，非交互环境自动同意 LLM 外发 |
-| `PYTEST_CURRENT_TEST` | — | 由 pytest 自动注入；**存在时会跳过外发确认**。仅供测试，请勿在生产环境手工设置 |
+| `PYTEST_CURRENT_TEST` | — | 由 pytest 自动注入；**存在且 pytest 已加载时才跳过外发确认**（T0-1 加固：生产环境误设不再绕过） |
 
 普通 `draft` 模式的增强内容：元信息抽取（题目/作者/摘要/关键词）、英文摘要与关键词翻译、
 PPT 要点语义提炼、章节到 PPT 分区的语义分类、无标题文档的语义分章、
 每页演讲备注（写入 PPT 备注区，带 AI 标记）。
+
+`--polish LEVEL` 是独立的正文润色步骤（T3-1），与 `--llm` 可分别或组合使用：
+- `conservative`：微调语句通顺度，不改变用词与结构
+- `standard`：改写为更学术化、更流畅的表达，保持原意
+- `strong`：深度改写提升学术表达质量，重组句式与衔接
+- 所有润色段落末尾追加 `<AI润色，请核对>` 标记，便于人工核对
+- 失败时保留原文不中断；占位符/过短/已标记段落自动跳过
+- 需 LLM 外发确认（同 `--llm` 机制）
 
 原则：在普通 `draft` 模式中，LLM 只做整理/提炼/翻译/分类，不扩写正文；
 摘要、英文摘要和演讲备注等生成文本会带 `<AI生成，请核对>` 标记，题目、作者、

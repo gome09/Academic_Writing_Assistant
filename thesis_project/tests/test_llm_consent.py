@@ -12,9 +12,10 @@ from src import main as main_mod
 
 
 class _Args:
-    def __init__(self, yes=False, llm=False):
+    def __init__(self, yes=False, llm=False, polish=None):
         self.yes = yes
         self.llm = llm
+        self.polish = polish
 
 
 def _doc(source="input/a.md"):

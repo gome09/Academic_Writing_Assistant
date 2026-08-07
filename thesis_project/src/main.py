@@ -154,7 +154,7 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
 
 
 def _confirm_llm_transfer(args, docs, required=False) -> bool:
-    if not (args.llm or required):
+    if not (args.llm or args.polish or required):
         return True
     if not os.environ.get("LLM_API_KEY"):
         return True
@@ -217,6 +217,10 @@ def main():
                     help="生成 Word 时刷新域并导出 PDF（隐含 --refresh-fields）")
     ap.add_argument("--format-template", metavar="FILE",
                     help="从 YAML 文件加载 Word/PPT 格式覆盖")
+    ap.add_argument("--polish", choices=["conservative", "standard", "strong"],
+                    metavar="LEVEL", help="draft 模式对正文段落多轮润色"
+                    "（需 LLM_API_KEY；conservative/standard/strong 三档；"
+                    "输出带 <AI润色，请核对> 标记，失败回退原文）")
     ap.add_argument("--dry-run", action="store_true",
                     help="仅检查输入可读性、模式和 LLM 外发清单，不调用外部服务或生成产物")
     ap.add_argument("--yes", action="store_true",
@@ -255,13 +259,13 @@ def main():
         mode = "refs" if topic_doc is not None else "draft"
 
     if args.dry_run:
-        if args.llm or mode == "refs":
+        if args.llm or args.polish or mode == "refs":
             _print_llm_transfer_summary(docs)
         from src.runtime_report import write_report
         write_report(args.report or os.path.join(args.output, "运行报告.json"),
                      {"status": "dry_run", "files": [d["source"] for d in docs],
                       "mode": mode,
-                      "llm_requested": bool(args.llm or mode == "refs")})
+                      "llm_requested": bool(args.llm or args.polish or mode == "refs")})
         print("  [dry-run] 已完成输入检查，未生成产物。")
         return 0
 
@@ -277,6 +281,14 @@ def main():
         print("②+ LLM 增强")
         from src import llm_enhancer
         thesis, deck = llm_enhancer.enhance(thesis, deck, docs)
+    if args.polish:
+        print("②+ 正文润色")
+        from src import llm_enhancer
+        if not llm_enhancer.is_available():
+            print("  [LLM] 未设置 LLM_API_KEY，跳过润色。")
+        else:
+            n = llm_enhancer.polish_paragraphs(thesis, args.polish)
+            print(f"  [LLM] 润色完成，{n} 个段落已标记 <AI润色，请核对>。")
     print(f"  论文：{len(thesis['chapters'])} 章；PPT：{len(deck['slides'])} 页。")
 
     print("③ 生成草案")

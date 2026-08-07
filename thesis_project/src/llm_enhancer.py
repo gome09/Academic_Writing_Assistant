@@ -24,6 +24,7 @@ import unicodedata
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 AI_MARK = "<AI生成，请核对>"
+POLISH_MARK = "<AI润色，请核对>"
 _VALID_BUCKETS = {"background", "method", "result", "conclusion"}
 
 
@@ -370,6 +371,68 @@ def rechapter(thesis: dict) -> None:
         carrier["tables"].extend(tables)
         carrier["images"].extend(images)
     thesis["chapters"] = new_chapters
+
+
+# ---------------------------------------------------------------------------
+#  T3-1：多轮润色（可选 --polish，三档改写，带标记，可降级）
+# ---------------------------------------------------------------------------
+_POLISH_SYS = {
+    "conservative": (
+        "你是学术论文润色助手（保守档）。微调语句通顺度与标点，"
+        "不改变用词、语序和段落结构，不增加任何原文没有的信息。"),
+    "standard": (
+        "你是学术论文润色助手（标准档）。改写语句使其更学术化、更流畅，"
+        "保持原意与核心信息，不得增加原文没有的事实或数据。"),
+    "strong": (
+        "你是学术论文润色助手（强力档）。深度改写以提升学术表达质量，"
+        "重组句式与衔接，但必须保持原意，不得增加原文没有的信息。"),
+}
+
+
+def polish_paragraphs(thesis: dict, level: str = "standard") -> int:
+    """对正文段落逐章润色，就地替换 thesis['chapters'] 中的 paras。
+
+    - level: conservative | standard | strong
+    - 每个被润色的段落末尾追加 POLISH_MARK
+    - 占位符/过短段落/已有 AI 标记的段落跳过
+    - 任一章失败则该章保留原文（不中断）
+    - 返回成功润色的段落数
+    """
+    from src.organizer import PLACEHOLDER
+    sys_prompt = _POLISH_SYS.get(level, _POLISH_SYS["standard"])
+    polished_count = 0
+    for ch in thesis.get("chapters", []):
+        paras = ch.get("paras", [])
+        # 筛选可润色段落：非占位符、非空、足够长、无已有 AI 标记
+        candidates = {}
+        for i, p in enumerate(paras):
+            if (p and p != PLACEHOLDER and len(p) >= 20
+                    and AI_MARK not in p and POLISH_MARK not in p):
+                candidates[i] = p
+        if not candidates:
+            continue
+        try:
+            numbered = "\n".join(f"[{i}] {p[:800]}" for i, p in candidates.items())
+            data = _chat_json(
+                sys_prompt,
+                '请以 JSON 输出 {"0": "润色后段落", "1": "..."}（键为段落编号）：\n\n'
+                + numbered)
+            if not isinstance(data, dict):
+                continue
+            for idx_str, polished in data.items():
+                try:
+                    idx = int(idx_str)
+                except (ValueError, TypeError):
+                    continue
+                if idx not in candidates:
+                    continue
+                text = str(polished).strip()
+                if text and text != candidates[idx]:
+                    paras[idx] = f"{text} {POLISH_MARK}"
+                    polished_count += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"  [LLM告警] 《{ch['title']}》润色失败，保留原文：{e}")
+    return polished_count
 
 
 # ---------------------------------------------------------------------------
