@@ -33,7 +33,6 @@ ACCENT = RGBColor(*_C["accent_rgb"])
 TEXT = RGBColor(*_C["text_rgb"])
 MUTED = RGBColor(*_C["muted_rgb"])
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
-LAST_WARNINGS = []
 _LOGGER = None
 
 CN_FONT = P["font"]["family_cn"]
@@ -41,6 +40,20 @@ EN_FONT = P["font"]["family_en"]
 SZ = P["sizes"]
 W_IN = P["slide"]["width_inch"]
 H_IN = P["slide"]["height_inch"]
+
+
+class BuildResult(str):
+    """build() 返回值：既是输出路径字符串，又携带本次构建的告警列表（T0-4）。
+
+    作为 str 子类保持完全向后兼容——os.path.getsize / endswith / 字符串拼接
+    等调用方无需感知 .warnings 属性即可正常工作。
+    """
+    warnings: list
+
+    def __new__(cls, path: str, warnings: list):
+        obj = str.__new__(cls, path)
+        obj.warnings = warnings
+        return obj
 
 
 def reload_spec():
@@ -84,8 +97,9 @@ def _fill(shape, color):
     shape.line.fill.background()
 
 
-def _warn(message):
-    LAST_WARNINGS.append(message)
+def _warn(message, warnings: list):
+    """记录告警到局部列表并打印（T0-4：不再依赖模块级 LAST_WARNINGS）。"""
+    warnings.append(message)
     if _LOGGER is not None:
         _LOGGER.warning(message)
     print(f"  [警告] {message}")
@@ -166,7 +180,9 @@ def _slide_section(prs, s):
     return slide
 
 
-def _slide_content(prs, s):
+def _slide_content(prs, s, warnings=None):
+    if warnings is None:
+        warnings = []
     slide = _blank(prs)
     _title_bar(slide, s["title"])
     media = s.get("media") or []
@@ -184,19 +200,21 @@ def _slide_content(prs, s):
         r = p.add_run(); r.text = "▪  " + b
         _set_font(r, SZ["body_pt"], TEXT)
     if has_media:
-        _render_media(slide, media[0], 7.2, 1.9, 5.4, 4.8)
+        _render_media(slide, media[0], 7.2, 1.9, 5.4, 4.8, warnings)
     return slide
 
 
-def _render_media(slide, media, left, top, width, height):
+def _render_media(slide, media, left, top, width, height, warnings=None):
     """Render the first media block using deterministic, bounded layouts."""
+    if warnings is None:
+        warnings = []
     if media.get("kind") == "image" and media.get("data"):
         try:
             slide.shapes.add_picture(io.BytesIO(media["data"]),
                                      Inches(left), Inches(top),
                                      width=Inches(width), height=Inches(height))
         except Exception as exc:  # noqa: BLE001
-            _warn(f"PPT 图片插入失败：{exc}")
+            _warn(f"PPT 图片插入失败：{exc}", warnings)
             tf = _textbox(slide, left, top + height / 2 - 0.2, width, 0.5)
             p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
             r = p.add_run(); r.text = "<图片插入失败>"
@@ -268,7 +286,7 @@ def build(deck, out_path):
     except Exception:  # pragma: no cover - logging is part of stdlib
         _LOGGER = None
     reload_spec()
-    LAST_WARNINGS.clear()
+    warnings: list = []  # T0-4：局部告警列表，随返回值传出
     prs = Presentation()
     prs.slide_width = Inches(W_IN)
     prs.slide_height = Inches(H_IN)
@@ -277,7 +295,11 @@ def build(deck, out_path):
     total = len(slides)
     for idx, s in enumerate(slides, 1):
         fn = _DISPATCH.get(s["type"], _slide_content)
-        slide = fn(prs, s)
+        # content 页可能含媒体，需要传入 warnings；其余页不产生告警
+        if s["type"] == "content":
+            slide = fn(prs, s, warnings)
+        else:
+            slide = fn(prs, s)
         # 封面/分节/致谢不加页脚
         if s["type"] in ("outline", "content"):
             _footer(slide, idx, total, deck["title"])
@@ -287,17 +309,17 @@ def build(deck, out_path):
     p_min = P["principle"]["total_slides_min"]
     p_max = P["principle"]["total_slides_max"]
     if total < p_min:
-        _warn(f"PPT 总页数 {total} 低于规范下限 {p_min}，请检查。")
+        _warn(f"PPT 总页数 {total} 低于规范下限 {p_min}，请检查。", warnings)
     elif total > p_max:
-        _warn(f"PPT 总页数 {total} 高于规范上限 {p_max}，请检查。")
-    _check_structure(slides)
-    _check_content_limits(slides)
-    _check_shape_bounds(prs)
+        _warn(f"PPT 总页数 {total} 高于规范上限 {p_max}，请检查。", warnings)
+    _check_structure(slides, warnings)
+    _check_content_limits(slides, warnings)
+    _check_shape_bounds(prs, warnings)
     prs.save(out_path)
-    return out_path
+    return BuildResult(out_path, warnings)
 
 
-def _check_structure(slides):
+def _check_structure(slides, warnings=None):
     """按 PPT_SPEC["structure"] 校验各段页数。
 
     - cover / outline / thanks：按 slide["type"] 直接计数校验。
@@ -307,6 +329,8 @@ def _check_structure(slides):
       slide["bucket"] 归属计数，与规范 min/max 比较（section 分节页不计入）。
       整份 deck 都不带 bucket 信息（旧格式/手工构造）时跳过该项校验。
     """
+    if warnings is None:
+        warnings = []
     checkable = {"cover", "outline", "thanks"}
     skip_min = {"outline"}
     counts = {}
@@ -318,9 +342,11 @@ def _check_structure(slides):
             continue
         n = counts.get(key, 0)
         if n < seg["min"] and key not in skip_min:
-            _warn(f"PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。")
+            _warn(f"PPT {seg['title']}页数 {n} 低于规范下限 {seg['min']}，请检查。",
+                  warnings)
         elif n > seg["max"]:
-            _warn(f"PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。")
+            _warn(f"PPT {seg['title']}页数 {n} 高于规范上限 {seg['max']}，请检查。",
+                  warnings)
 
     seg_by_key = {seg["key"]: seg for seg in P["structure"]}
     bucket_counts = {}
@@ -336,10 +362,10 @@ def _check_structure(slides):
         n = bucket_counts.get(key, 0)
         if n < seg["min"]:
             _warn(f"PPT {seg['title']}内容页数 {n} "
-                  f"低于规范下限 {seg['min']}，请检查。")
+                  f"低于规范下限 {seg['min']}，请检查。", warnings)
         elif n > seg["max"]:
             _warn(f"PPT {seg['title']}内容页数 {n} "
-                  f"高于规范上限 {seg['max']}，请检查。")
+                  f"高于规范上限 {seg['max']}，请检查。", warnings)
 
 
 def _display_width(text):
@@ -347,8 +373,10 @@ def _display_width(text):
                for ch in str(text))
 
 
-def _check_content_limits(slides):
+def _check_content_limits(slides, warnings=None):
     """Warn about content that cannot satisfy configured line/table limits."""
+    if warnings is None:
+        warnings = []
     max_lines = P["layout"].get("max_lines_per_bullet", 2)
     for idx, slide in enumerate(slides, 1):
         if slide.get("type") != "content":
@@ -357,20 +385,22 @@ def _check_content_limits(slides):
         for bullet in slide.get("bullets", []):
             if math.ceil(_display_width(bullet) / chars_per_line) > max_lines:
                 _warn(f"PPT 第 {idx} 页要点可能超过 {max_lines} 行："
-                      f"{str(bullet)[:30]}")
+                      f"{str(bullet)[:30]}", warnings)
         for media in slide.get("media", []):
             if media.get("kind") == "table":
                 cols = max((len(r) for r in media.get("rows") or []), default=0)
                 if cols > 6:
                     _warn(f"PPT 第 {idx} 页表格有 {cols} 列，"
-                          "PPT 仅展示前 6 列，请在 Word 中查看完整表格。")
+                          "PPT 仅展示前 6 列，请在 Word 中查看完整表格。", warnings)
 
 
-def _check_shape_bounds(prs):
+def _check_shape_bounds(prs, warnings=None):
+    if warnings is None:
+        warnings = []
     for idx, slide in enumerate(prs.slides, 1):
         for shape in slide.shapes:
             if (shape.left < 0 or shape.top < 0 or
                     shape.left + shape.width > prs.slide_width or
                     shape.top + shape.height > prs.slide_height):
                 _warn(f"PPT 第 {idx} 页存在越界元素："
-                      f"{getattr(shape, 'name', 'shape')}")
+                      f"{getattr(shape, 'name', 'shape')}", warnings)

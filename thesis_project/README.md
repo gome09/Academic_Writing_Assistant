@@ -227,10 +227,8 @@ ppt:
 
 运行：`python src/main.py --format-template format.yml`。未知字段和类型错误会在
 生成前直接报错；尺寸与范围仍应按示例和本校规范填写有效值。
-`format_spec.py` 中仍标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则）仅作文档参考，修改不会影响产物。
-另有四个**未加该标注、但同样不被构建器消费**的字段，改它们也不会生效：
-`figure.caption_position`（图题恒在图下）、`figure.number_by_chapter` 与
-`table.number_by_chapter`（编号恒为「章-序」）、`table.style`（恒用三线表）。
+`format_spec.py` 中标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则、`figure.caption_position`、
+`figure/table.number_by_chapter`、`table.style` 等）仅作文档参考，修改不会影响产物。
 与之相对，`table.caption_position`、`figure/table.caption_align` 以及页面方向、
 PPT 内容比例、媒体分页等字段是真实生效的，可通过 YAML 模板或配置文件调整。`PPT_SPEC["structure"]` 的标题和页数范围只用于分区页数校验与告警，
 不会改变 `organizer.py` 固定生成的 PPT 分区、顺序或标题。

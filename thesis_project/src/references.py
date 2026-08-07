@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import urllib.parse
 import urllib.request
+
+_logger = logging.getLogger("thesis_project")
 
 _DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", re.I)
 _YEAR_RE = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
@@ -131,6 +134,7 @@ def lookup_crossref(title: str, doi: str = "", cache_path: str | None = None) ->
     if doi:
         query = {"filter": "doi:" + doi, "rows": 1}
     url = "https://api.crossref.org/works?" + urllib.parse.urlencode(query)
+    _logger.info("Crossref 查询：%s", url)
     req = urllib.request.Request(url, headers={"User-Agent": "thesis-project/1.0"})
     with urllib.request.urlopen(req, timeout=10) as response:  # noqa: S310
         data = json.load(response)

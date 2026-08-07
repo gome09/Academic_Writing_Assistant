@@ -16,12 +16,13 @@
 原则：
   - LLM 生成综述与要点，不代写核心研究章节正文（学术诚信边界）。
   - 综述正文和视觉摘要带 AI_MARK；写作要点不统一附加标记，仍需人工核对。
-  - 任何步骤降级都记入 _degraded 并汇总打印。
+  - 任何步骤降级都记入局部 degraded 列表并随 synthesize() 返回值传出（T0-4）。
   - 网络出口复用 llm_enhancer._chat_json / llm_vision._chat_vision，
     测试打桩 synthesizer._chat_json / llm_vision._chat_vision 即可。
 """
 from __future__ import annotations
 import json
+import logging
 import os
 import re
 import sys
@@ -37,12 +38,13 @@ from src.references import (entry_from_card, extract_local_metadata,
 _VALID_KINDS = {"intro", "review", "core", "conclusion"}
 _MEDIA_TYPES = ("xlsx", "csv", "image")
 
-# 本次 synthesize() 调用中发生的降级记录（步骤名列表）
-_degraded = []
+_logger = logging.getLogger("thesis_project")
 
 
-def _note_degrade(step: str, err) -> None:
-    _degraded.append(step)
+def _note_degrade(step: str, err, degraded: list) -> None:
+    """记录降级步骤到局部列表并打印告警（T0-4：不再依赖模块级全局）。"""
+    degraded.append(step)
+    _logger.warning("LLM降级：%s失败，已降级：%s", step, err)
     print(f"  [LLM告警] {step}失败，已降级：{err}")
 
 
@@ -92,12 +94,15 @@ _CARD_SYS = ("你是文献调研助手。阅读给定的单篇文献片段，抽
              "只能从原文归纳，禁止编造；无法确定的字段输出空字符串或空列表。")
 
 
-def make_cards(ref_docs: list) -> list:
+def make_cards(ref_docs: list, degraded: list | None = None) -> list:
     """逐篇 -> 摘要卡；单篇失败退化为文本卡，不影响其它篇。
 
+    degraded 为本次调用的降级记录列表（T0-4：上下文化，不再用模块级全局）。
     卡片字段：title/authors/year/topic/method/conclusion/quotes/source；
     退化卡额外带 fallback_text（原文截断），title 用文件名。
     """
+    if degraded is None:
+        degraded = []
     cards = []
     for d in ref_docs:
         name = os.path.basename(d["source"])
@@ -126,7 +131,7 @@ def make_cards(ref_docs: list) -> list:
                 "_local_meta": local,
             })
         except Exception as e:  # noqa: BLE001
-            _note_degrade(f"《{name}》摘要卡", e)
+            _note_degrade(f"《{name}》摘要卡", e, degraded)
             cards.append({"title": name, "authors": [], "year": "",
                           "topic": "", "method": "", "conclusion": "",
                           "quotes": [], "source": name, "_local_meta": local,
@@ -155,8 +160,11 @@ def _default_outline(n_cards: int) -> list:
     return out
 
 
-def build_outline(topic: dict, cards: list, img_notes: list) -> list:
+def build_outline(topic: dict, cards: list, img_notes: list,
+                  degraded: list | None = None) -> list:
     """返回 [{"title", "kind", "cards": [卡编号]}]；失败/不合格退默认骨架。"""
+    if degraded is None:
+        degraded = []
     card_lines = [f"[{i}] {c['title']}：{c.get('topic', '')}"
                   for i, c in enumerate(cards)]
     img_lines = [f"（图片素材）{n['caption']}：{n['summary']}"
@@ -186,7 +194,7 @@ def build_outline(topic: dict, cards: list, img_notes: list) -> list:
             raise ValueError(f"大纲章数不合理：{len(outline)}")
         return outline
     except Exception as e:  # noqa: BLE001
-        _note_degrade("大纲生成", e)
+        _note_degrade("大纲生成", e, degraded)
         return _default_outline(len(cards))
 
 
@@ -223,8 +231,11 @@ def _material_paras(ch: dict, cards: list) -> list:
     return paras
 
 
-def write_review(ch: dict, topic: dict, cards: list, validate=False) -> list:
+def write_review(ch: dict, topic: dict, cards: list, degraded: list | None = None,
+                 validate=False) -> list:
     """综述章 -> 正文段落列表（每段带 AI_MARK）；失败退素材摘录。"""
+    if degraded is None:
+        degraded = []
     briefs = [_card_brief(i + 1, cards[i]) for i in ch["cards"]]
     try:
         prompt = ('请以 JSON 输出 {"paras": ["段落1", "段落2"]}。\n'
@@ -251,7 +262,7 @@ def write_review(ch: dict, topic: dict, cards: list, validate=False) -> list:
                     raise ValueError("；".join(issues) or "纠正后没有综述段落")
         return [f"{p} {AI_MARK}" for p in paras]
     except Exception as e:  # noqa: BLE001
-        _note_degrade(f"《{ch['title']}》综述", e)
+        _note_degrade(f"《{ch['title']}》综述", e, degraded)
         return _material_paras(ch, cards)
 
 
@@ -265,8 +276,11 @@ _POINTS_SYS = (
     '只输出 JSON：{"章节标题": ["要点", ...], ...}')
 
 
-def write_points(chapters: list, topic: dict, cards: list) -> dict:
+def write_points(chapters: list, topic: dict, cards: list,
+                 degraded: list | None = None) -> dict:
     """非 review 章 -> {章节标题: [要点...]}；失败返回 {}（调用方留占位）。"""
+    if degraded is None:
+        degraded = []
     if not chapters:
         return {}
     briefs = [_card_brief(i + 1, c) for i, c in enumerate(cards)]
@@ -286,15 +300,17 @@ def write_points(chapters: list, topic: dict, cards: list) -> dict:
                     out[ch["title"]] = pts[:6]
         return out
     except Exception as e:  # noqa: BLE001
-        _note_degrade("写作要点", e)
+        _note_degrade("写作要点", e, degraded)
         return {}
 
 
 # ---------------------------------------------------------------------------
 #  ⑥ 视觉理解 + 媒体挂载（纯规则挂载）
 # ---------------------------------------------------------------------------
-def describe_images(media_docs: list) -> list:
+def describe_images(media_docs: list, degraded: list | None = None) -> list:
     """截图 -> [{"source", "caption", "summary"}]；未配置视觉模型返回 []。"""
+    if degraded is None:
+        degraded = []
     from src import llm_vision
     if not llm_vision.is_vision_available():
         return []
@@ -309,7 +325,7 @@ def describe_images(media_docs: list) -> list:
             notes.append({"source": name, "caption": r["caption"],
                           "summary": r["summary"]})
         except Exception as e:  # noqa: BLE001
-            _note_degrade(f"《{name}》视觉理解", e)
+            _note_degrade(f"《{name}》视觉理解", e, degraded)
     return notes
 
 
@@ -367,13 +383,13 @@ def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
 def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
                cache_path=None) -> dict:
     """参考资料 -> thesis dict（与 organizer.organize 同构，仅 Word 用）。"""
-    del _degraded[:]
+    degraded: list = []  # T0-4：局部降级列表，随返回值传出
     topic = parse_topic(topic_doc)
     text_docs = [d for d in ref_docs if d["type"] not in _MEDIA_TYPES]
     media_docs = [d for d in ref_docs if d["type"] in _MEDIA_TYPES]
 
     print(f"  文献 {len(text_docs)} 篇，数据/截图 {len(media_docs)} 个")
-    cards = make_cards(text_docs)
+    cards = make_cards(text_docs, degraded)
     if lookup_metadata:
         for card in cards:
             try:
@@ -398,9 +414,9 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
                     parts = hit.get("published", {}).get("date-parts", [[]])
                     local["year"] = str(parts[0][0]) if parts and parts[0] else ""
             except Exception as e:  # noqa: BLE001
-                _note_degrade(f"《{card.get('title', '')}》Crossref 元数据", e)
-    img_notes = describe_images(media_docs)
-    outline = build_outline(topic, cards, img_notes)
+                _note_degrade(f"《{card.get('title', '')}》Crossref 元数据", e, degraded)
+    img_notes = describe_images(media_docs, degraded)
+    outline = build_outline(topic, cards, img_notes, degraded)
 
     chapters = []
     for spec_ch in outline:
@@ -408,12 +424,12 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
         ch["kind"] = spec_ch["kind"]
         if spec_ch["kind"] == "review":
             ch["paras"].append("【提示】" + REFS_SPEC["review_notice"])
-            ch["paras"].extend(write_review(spec_ch, topic, cards,
-                                             validate=True))
+            ch["paras"].extend(write_review(spec_ch, topic, cards, degraded,
+                                            validate=True))
         chapters.append(ch)
 
     plain = [spec_ch for spec_ch in outline if spec_ch["kind"] != "review"]
-    points = write_points(plain, topic, cards)
+    points = write_points(plain, topic, cards, degraded)
     for spec_ch, ch in zip(outline, chapters):
         if spec_ch["kind"] == "review":
             continue
@@ -432,8 +448,8 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
     reference_entries = [entry_from_card(c, c.get("_local_meta")) for c in cards]
     references = [format_gbt(entry) for entry in reference_entries]
 
-    if _degraded:
-        print(f"  [提示] 本次共 {len(_degraded)} 步降级，请检查上方告警。")
+    if degraded:
+        print(f"  [提示] 本次共 {len(degraded)} 步降级，请检查上方告警。")
     return {
         "title": topic["title"],
         "author": topic["author"],
@@ -445,5 +461,5 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
         "auto_skeleton": False,
         "references": references,
         "reference_entries": reference_entries,
-        "degraded_steps": list(_degraded),
+        "degraded_steps": list(degraded),
     }

@@ -10,6 +10,7 @@
   - 字号用「磅(pt)」；页边距用「厘米(cm)」；行距固定值用「磅(pt)」。
   - python-docx 用 Pt / Cm；python-pptx 用 Pt / Inches。
 """
+import copy
 
 # =============================================================================
 #  一、论文级别 WORD 规范（本科毕业论文）
@@ -93,17 +94,17 @@ WORD_SPEC = {
 
     # ---- 图 / 表 ----
     "figure": {
-        "caption_position": "below",   # 图题在下
+        "caption_position": "below",   # 图题在下（暂未落实，当前固定在下方）
         "caption_align": "center",
-        "number_by_chapter": True,     # 图2-1
+        "number_by_chapter": True,     # 图2-1（暂未落实，当前固定按章编号）
         "prefix": "图",
     },
     "table": {
-        "caption_position": "above",   # 表题在上
+        "caption_position": "above",   # 表题在上（暂未落实，当前固定在上方）
         "caption_align": "center",
-        "number_by_chapter": True,     # 表2-1
+        "number_by_chapter": True,     # 表2-1（暂未落实，当前固定按章编号）
         "prefix": "表",
-        "style": "three_line",         # 三线表
+        "style": "three_line",         # 三线表（暂未落实，当前固定三线表样式）
     },
 
     # ---- 页码 ----
@@ -231,3 +232,11 @@ REFS_SPEC = {
     # 无法按语义匹配到章节的表格/截图统一挂到这一章
     "materials_chapter": "素材附录（整理用，定稿前删除）",
 }
+
+
+# =============================================================================
+#  不可变默认值快照（T0-2：apply_template 始终从此处合并，避免互相污染）
+# =============================================================================
+_WORD_DEFAULTS = copy.deepcopy(WORD_SPEC)
+_PPT_DEFAULTS = copy.deepcopy(PPT_SPEC)
+_REFS_DEFAULTS = copy.deepcopy(REFS_SPEC)

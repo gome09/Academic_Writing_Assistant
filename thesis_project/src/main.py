@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 import argparse
+import logging
 import os
 import sys
 from urllib.parse import urlparse
@@ -33,6 +34,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_INPUT = os.path.join(ROOT, "input")
 DEFAULT_OUTPUT = os.path.join(ROOT, "output")
 
+_logger = logging.getLogger("thesis_project")
+
 
 def gather_docs(inputs):
     """读取所有输入，返回 (docs, errors)。
@@ -53,6 +56,7 @@ def gather_docs(inputs):
                 print(f"  [读取] {os.path.basename(item)}")
             except Exception as e:  # noqa: BLE001
                 errors.append((item, str(e)))
+                _logger.warning("读取失败 %s: %s", item, e)
                 print(f"  [跳过] {item}: {e}")
         else:
             errors.append((item, '不存在'))
@@ -73,11 +77,14 @@ def _build_with_retry(build_fn, data, out_path):
         try:
             result = build_fn(data, path)
             if i > 0:
+                _logger.warning("写盘重试 %s -> %s（文件被占用）",
+                                os.path.basename(out_path), os.path.basename(path))
                 print(f"  [提示] {os.path.basename(out_path)} 正被占用"
                       f"（可能在 Word/WPS 中打开），已改存：{os.path.basename(path)}")
             return result
         except PermissionError:
             continue
+    _logger.error("无法写入 %s：文件被占用，全部重试失败", out_path)
     print(f"  [错误] 无法写入 {out_path}：文件被占用。请关闭 Word/WPS 后重试。")
     return None
 
@@ -157,8 +164,11 @@ def _confirm_llm_transfer(args, docs, required=False) -> bool:
     images = sum(b.get("kind") == "image" for d in docs for b in d["blocks"])
     print(f"  [LLM外发确认] 端点：{host}；文件：{len(docs)}；"
           f"文本约 {chars} 字符；图片 {images} 张")
-    if args.yes or os.environ.get("THESIS_LLM_CONSENT") == "1" or \
-            os.environ.get("PYTEST_CURRENT_TEST"):
+    _logger.info("LLM外发确认：端点=%s 文件=%d 文本=%d字符 图片=%d张",
+                 host, len(docs), chars, images)
+    if args.yes or os.environ.get("THESIS_LLM_CONSENT") == "1" or (
+            os.environ.get("PYTEST_CURRENT_TEST")
+            and sys.modules.get("pytest") is not None):
         return True
     if sys.stdin.isatty():
         return input("  是否继续发送？[y/N] ").strip().lower() in ("y", "yes")
@@ -272,7 +282,7 @@ def main():
     print("③ 生成草案")
     ok = True
     outputs = []
-    pptx_builder.LAST_WARNINGS.clear()
+    ppt_warnings: list = []
     if args.only != "ppt":
         wp = os.path.join(args.output, "论文草案.docx")
         wp = _build_with_retry(docx_builder.build, thesis, wp)
@@ -286,10 +296,13 @@ def main():
             ok = False
     if args.only != "word":
         pp = os.path.join(args.output, "答辩PPT草案.pptx")
-        pp = _build_with_retry(pptx_builder.build, deck, pp)
-        if pp:
+        result = _build_with_retry(pptx_builder.build, deck, pp)
+        if result:
+            pp = result
             outputs.append(pp)
             print(f"  ✔ PPT : {pp}")
+            # BuildResult 携带告警列表（T0-4）
+            ppt_warnings = getattr(result, "warnings", [])
         else:
             ok = False
 
@@ -300,7 +313,7 @@ def main():
                  {"status": "ok" if ok else "error", "mode": "draft",
                   "files": len(docs), "read_errors": errors,
                   "outputs": outputs, "llm": bool(args.llm),
-                  "warnings": list(pptx_builder.LAST_WARNINGS)})
+                  "warnings": ppt_warnings})
     return 0 if ok else 1
 
 

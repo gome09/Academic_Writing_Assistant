@@ -454,11 +454,6 @@ def _render_content(doc, node, ci, counters):
             _add_para(doc, block["text"], W["body"], indent_chars=2)
 
 
-def _render_media(doc, node, ci, counters):
-    """Backward-compatible alias for callers using the old helper."""
-    _render_content(doc, node, ci, counters)
-
-
 def _cn_num(n):
     """0..99 转中文数字（含 11/19/20/21/99 边界）。调用方传入的 n 从 1 起。"""
     cn_digit = "零一二三四五六七八九"

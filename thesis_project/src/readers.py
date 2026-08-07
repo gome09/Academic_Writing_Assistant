@@ -490,9 +490,3 @@ def read_dir_detailed(dir_path: str):
             print(f"  [跳过] {name}: {e}")
             errors.append((full, str(e)))
     return docs, errors
-
-
-def read_dir(dir_path: str) -> list:
-    """Backward-compatible directory reader returning only documents."""
-    docs, _ = read_dir_detailed(dir_path)
-    return docs
