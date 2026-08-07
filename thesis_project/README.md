@@ -233,5 +233,9 @@ ppt:
 PPT 内容比例、媒体分页等字段是真实生效的，可通过 YAML 模板或配置文件调整。
 `reference.standard` 现支持 `GB/T 7714`（默认）、`APA`、`MLA`、`Chicago` 四种著录样式，
 切换后参考资料模式的参考文献条目随之变化（普通草案模式保留源条目原样）。
-`PPT_SPEC["structure"]` 的标题和页数范围只用于分区页数校验与告警，
-不会改变 `organizer.py` 固定生成的 PPT 分区、顺序或标题。
+`PPT_SPEC["structure"]` 现驱动 PPT 分区生成（T2-1）——内容段的标题与顺序取自配置，
+可通过 YAML 自定义增减分段（如去掉「结论与展望」或新增「未来工作」），默认仍为 7 段。
+`PPT_SPEC["theme"]["preset"]` 支持 5 套内置主题（T2-2）：`academic_blue`（默认深蓝）、
+`minimal_gray`（简约灰）、`campus_red`（院校红）、`dark`（深色）、`forest_green`（森林绿），
+切换后 PPT 配色随之变化；也可单独覆盖 `primary_rgb`/`accent_rgb` 等字段与预设共存。
+`PPT_SPEC["structure"]` 的页数范围仍只用于校验与告警。

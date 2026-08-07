@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 
 from config.format_spec import (
-    PPT_SPEC, WORD_SPEC,
+    PPT_SPEC, WORD_SPEC, THEME_PRESETS,
     _PPT_DEFAULTS, _WORD_DEFAULTS,
 )
 
@@ -43,11 +43,21 @@ def _validate_keys(override, base, path):
             if not isinstance(value, dict):
                 raise ValueError(f"模板字段 {path}.{key} 必须是对象")
             _validate_keys(value, expected, f"{path}.{key}")
-        elif not isinstance(value, type(expected)) and not (
-                isinstance(expected, float) and isinstance(value, int)):
+        elif isinstance(expected, (list, tuple)):
+            # YAML 序列解析为 list，默认值为 tuple——两者互通
+            if not isinstance(value, (list, tuple)):
+                raise ValueError(f"模板字段 {path}.{key} 必须是序列")
+        elif isinstance(expected, bool):
+            if not isinstance(value, bool):
+                raise ValueError(f"模板字段 {path}.{key} 类型不正确")
+        elif isinstance(expected, (int, float)):
+            ok_type = isinstance(value, (int, float)) and not isinstance(value, bool)
+            if not ok_type:
+                raise ValueError(f"模板字段 {path}.{key} 类型不正确")
+            if value < 0:
+                raise ValueError(f"模板字段 {path}.{key} 不能为负数")
+        elif not isinstance(value, type(expected)):
             raise ValueError(f"模板字段 {path}.{key} 类型不正确")
-        elif isinstance(value, (int, float)) and value < 0:
-            raise ValueError(f"模板字段 {path}.{key} 不能为负数")
 
 
 def apply_template(path: str) -> tuple[dict, dict]:
@@ -61,6 +71,12 @@ def apply_template(path: str) -> tuple[dict, dict]:
     # 始终从不可变默认值快照合并，避免多次 apply_template 互相污染（T0-2）
     word = _merge(_WORD_DEFAULTS, raw.get("word", {}))
     ppt = _merge(_PPT_DEFAULTS, raw.get("ppt", {}))
+    # T2-2：主题预设切换——preset 指定时先加载预设配色，再用用户显式覆盖字段覆盖
+    raw_theme = raw.get("ppt", {}).get("theme", {})
+    preset_name = raw_theme.get("preset") or ppt.get("theme", {}).get("preset")
+    if preset_name and preset_name in THEME_PRESETS:
+        preset = THEME_PRESETS[preset_name]
+        ppt["theme"] = {**_PPT_DEFAULTS["theme"], **preset, **raw_theme}
     WORD_SPEC.clear()
     WORD_SPEC.update(word)
     PPT_SPEC.clear()

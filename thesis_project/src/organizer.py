@@ -409,16 +409,32 @@ def organize(docs):
 
 
 def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
-    """把章节映射到 PPT 7 段结构。
+    """把章节映射到 PPT 结构（T2-1：由 PPT_SPEC["structure"] 驱动，默认 7 段）。
 
     classify_fn(title)->bucket、bullets_fn(paras)->list[str] 为可选注入点，
     默认用规则实现（_classify / _to_bullets），供 LLM 增强层替换。
+    内容段（排除 cover/outline/thanks）的标题与顺序均取自配置，可通过 YAML 自定义。
     """
     classify = classify_fn or _classify
     to_bullets = bullets_fn or _to_bullets
-    buckets = {"background": [], "method": [], "result": [], "conclusion": []}
+
+    # T2-1：从 PPT_SPEC["structure"] 读取内容段（cover/outline/thanks 为固定位）
+    _FIXED = {"cover", "outline", "thanks"}
+    content_segs = [seg for seg in PPT_SPEC["structure"]
+                    if seg["key"] not in _FIXED]
+    if not content_segs:  # 配置异常时回退默认四段
+        content_segs = [
+            {"key": "background", "title": "研究背景与意义"},
+            {"key": "method", "title": "研究方法与过程"},
+            {"key": "result", "title": "研究成果"},
+            {"key": "conclusion", "title": "结论与展望"},
+        ]
+    default_key = content_segs[0]["key"]
+    buckets = {seg["key"]: [] for seg in content_segs}
     for ch in chapters:
         key = classify(ch["title"])
+        if key not in buckets:  # 未知 bucket 归到首个内容段，避免丢章节
+            key = default_key
         paras = list(ch["paras"])
         media = []
         for block in iter_node_blocks(ch):
@@ -442,21 +458,21 @@ def _build_deck(meta, chapters, classify_fn=None, bullets_fn=None):
     slides = []
     slides.append({"type": "cover", "title": meta["title"],
                    "subtitle": f"答辩人：{meta['author']}"})
+    # T2-1：目录项取自配置的内容段标题
     slides.append({"type": "outline", "title": "目录",
-                   "items": ["研究背景与意义", "研究方法与过程",
-                             "研究成果", "结论与展望"]})
+                   "items": [seg["title"] for seg in content_segs]})
 
-    label = {"background": "研究背景与意义", "method": "研究方法与过程",
-             "result": "研究成果", "conclusion": "结论与展望"}
-    for key in ["background", "method", "result", "conclusion"]:
+    for seg in content_segs:
+        key = seg["key"]
+        label = seg["title"]
         group = buckets[key]
         if not group:
-            slides.append({"type": "section", "title": label[key],
+            slides.append({"type": "section", "title": label,
                            "bucket": key})
-            slides.append({"type": "content", "title": label[key],
+            slides.append({"type": "content", "title": label,
                            "bullets": ["<待补充要点>"], "bucket": key})
             continue
-        slides.append({"type": "section", "title": label[key], "bucket": key})
+        slides.append({"type": "section", "title": label, "bucket": key})
         for item in group:
             bullets = item["bullets"]
             chunks = [bullets[i:i + _MAX_BULLETS_PER_SLIDE]

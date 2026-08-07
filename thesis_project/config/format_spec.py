@@ -181,10 +181,48 @@ PPT_SPEC = {
 
     # ---- 主题配色（简洁、白底 + 一个主色）----
     "theme": {
+        "preset": "academic_blue",     # 主题预设名（T2-2），可选值见 THEME_PRESETS
         "primary_rgb": (0x1F, 0x4E, 0x79),   # 深蓝
         "accent_rgb": (0xC0, 0x50, 0x4D),    # 砖红点缀
         "text_rgb": (0x26, 0x26, 0x26),      # 近黑
         "muted_rgb": (0x80, 0x80, 0x80),     # 灰
+    },
+}
+
+
+# =============================================================================
+#  T2-2：主题预设包（配色 + 可选字体），通过 ppt.theme.preset 切换
+# =============================================================================
+THEME_PRESETS = {
+    "academic_blue": {
+        "primary_rgb": (0x1F, 0x4E, 0x79),   # 深蓝（默认）
+        "accent_rgb": (0xC0, 0x50, 0x4D),    # 砖红点缀
+        "text_rgb": (0x26, 0x26, 0x26),
+        "muted_rgb": (0x80, 0x80, 0x80),
+    },
+    "minimal_gray": {
+        "primary_rgb": (0x40, 0x40, 0x40),   # 深灰
+        "accent_rgb": (0x80, 0x80, 0x80),    # 中灰
+        "text_rgb": (0x33, 0x33, 0x33),
+        "muted_rgb": (0xA0, 0xA0, 0xA0),
+    },
+    "campus_red": {
+        "primary_rgb": (0xA0, 0x20, 0x20),   # 院校红
+        "accent_rgb": (0xD4, 0xA0, 0x17),    # 金色点缀
+        "text_rgb": (0x26, 0x26, 0x26),
+        "muted_rgb": (0x80, 0x80, 0x80),
+    },
+    "dark": {
+        "primary_rgb": (0x2B, 0x2B, 0x2B),   # 深色背景
+        "accent_rgb": (0x4E, 0xC9, 0xB0),    # 青色点缀
+        "text_rgb": (0xE0, 0xE0, 0xE0),      # 浅色文字
+        "muted_rgb": (0xA0, 0xA0, 0xA0),
+    },
+    "forest_green": {
+        "primary_rgb": (0x22, 0x5B, 0x3C),   # 森林绿
+        "accent_rgb": (0xD4, 0xA0, 0x17),    # 金色点缀
+        "text_rgb": (0x26, 0x26, 0x26),
+        "muted_rgb": (0x80, 0x80, 0x80),
     },
 }
 
