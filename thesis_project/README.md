@@ -80,6 +80,7 @@ python src/main.py --pdf                       # 生成 Word 时刷新域并导�
 python src/main.py --dry-run                   # 检查可读性/模式/外发清单并写报告，不调用外部服务或生成草案
 python src/main.py --llm --yes                 # 非交互环境确认 LLM 外发
 python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
+python src/main.py --ocr                        # 对扫描件 PDF 启用 OCR（需 pytesseract + pdf2image）
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
 python src/main.py --report 报告.json           # 自定义运行报告输出路径
 ```

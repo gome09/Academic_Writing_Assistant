@@ -318,18 +318,67 @@ def _pdf_lines_to_blocks(txt: str, blocks: list) -> None:
     flush()
 
 
-def _ensure_has_text(blocks: list, path: str) -> None:
-    """扫描件（图片型 PDF）提取不到文字时报错，避免静默生成全占位符骨架。"""
+def _ocr_available() -> bool:
+    """检查 OCR 依赖（pytesseract + pdf2image）是否可用。"""
+    try:
+        import pytesseract  # noqa: F401
+        import pdf2image  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _ocr_pdf(path: str) -> list:
+    """用 Tesseract OCR 识别扫描件 PDF，返回文本块列表。
+
+    依赖 pytesseract + pdf2image（可选依赖，未安装时抛 RuntimeError）。
+    """
+    try:
+        import pytesseract
+        from pdf2image import convert_from_path
+    except ImportError as exc:
+        raise RuntimeError(
+            "OCR 需要安装 pytesseract 和 pdf2image："
+            "pip install pytesseract pdf2image（还需系统安装 Tesseract-OCR）"
+        ) from exc
+    blocks = []
+    images = convert_from_path(path)
+    for img in images:
+        txt = pytesseract.image_to_string(img, lang="chi_sim+eng")
+        if txt.strip():
+            _pdf_lines_to_blocks(txt, blocks)
+    return blocks
+
+
+def _ensure_has_text(blocks: list, path: str, ocr: bool = False) -> None:
+    """扫描件（图片型 PDF）提取不到文字时处理。
+
+    ocr=True 时尝试 OCR 识别；否则或 OCR 失败时报错。
+    """
     if any(b.get("text") for b in blocks):
         return
     if any(b.get("kind") == "table" for b in blocks):
         return
+    if ocr:
+        try:
+            ocr_blocks = _ocr_pdf(path)
+            if any(b.get("text") for b in ocr_blocks):
+                blocks.extend(ocr_blocks)
+                print(f"  [OCR] {os.path.basename(path)}：OCR 识别成功，"
+                      f"提取到 {len(ocr_blocks)} 个文本块。")
+                return
+            print(f"  [OCR] {os.path.basename(path)}：OCR 未识别到文字。")
+        except RuntimeError as e:
+            print(f"  [OCR] {os.path.basename(path)}：{e}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [OCR] {os.path.basename(path)}：OCR 失败：{e}")
     raise RuntimeError(
         "未提取到任何文字，可能是扫描件（图片型 PDF）。"
-        "请先用 OCR 工具（如 WPS/Acrobat/umi-ocr）转成可复制文本的 PDF 再试")
+        "请先用 OCR 工具（如 WPS/Acrobat/umi-ocr）转成可复制文本的 PDF 再试，"
+        "或加 --ocr 启用内置 OCR（需安装 pytesseract + pdf2image）")
 
 
-def read_pdf(path: str) -> dict:
+def read_pdf(path: str, ocr: bool = False) -> dict:
     blocks = []
     meta = {}
     try:
@@ -377,7 +426,7 @@ def read_pdf(path: str) -> dict:
             txt = page.extract_text() or ""
             _pdf_lines_to_blocks(txt, blocks)
 
-    _ensure_has_text(blocks, path)
+    _ensure_has_text(blocks, path, ocr=ocr)
     return {"source": path, "type": "pdf", "blocks": blocks, "meta": meta}
 
 
@@ -464,16 +513,18 @@ _READERS = {
 }
 
 
-def read_file(path: str) -> dict:
+def read_file(path: str, ocr: bool = False) -> dict:
     """按扩展名读取单个文件，返回统一 Document。"""
     ext = os.path.splitext(path)[1].lower()
+    if ext == ".pdf":
+        return read_pdf(path, ocr=ocr)
     reader = _READERS.get(ext)
     if reader is None:
         raise ValueError(f"不支持的文件类型：{ext}（{path}）")
     return reader(path)
 
 
-def read_dir_detailed(dir_path: str):
+def read_dir_detailed(dir_path: str, ocr: bool = False):
     """Return (documents, errors) while keeping per-file failure details."""
     docs = []
     errors = []
@@ -484,7 +535,7 @@ def read_dir_detailed(dir_path: str):
         if os.path.splitext(name)[1].lower() not in _READERS:
             continue
         try:
-            docs.append(read_file(full))
+            docs.append(read_file(full, ocr=ocr))
             print(f"  [读取] {name}")
         except Exception as e:  # noqa: BLE001
             print(f"  [跳过] {name}: {e}")

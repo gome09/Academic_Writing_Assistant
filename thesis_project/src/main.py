@@ -37,7 +37,7 @@ DEFAULT_OUTPUT = os.path.join(ROOT, "output")
 _logger = logging.getLogger("thesis_project")
 
 
-def gather_docs(inputs):
+def gather_docs(inputs, ocr=False):
     """读取所有输入，返回 (docs, errors)。
 
     errors 是 [(path, reason), ...]，调用方在 main() 末尾聚合打印。
@@ -47,12 +47,12 @@ def gather_docs(inputs):
     for item in inputs:
         if os.path.isdir(item):
             print(f"[目录] {item}")
-            dir_docs, dir_errors = read_dir_detailed(item)
+            dir_docs, dir_errors = read_dir_detailed(item, ocr=ocr)
             docs.extend(dir_docs)
             errors.extend(dir_errors)
         elif os.path.isfile(item):
             try:
-                docs.append(read_file(item))
+                docs.append(read_file(item, ocr=ocr))
                 print(f"  [读取] {os.path.basename(item)}")
             except Exception as e:  # noqa: BLE001
                 errors.append((item, str(e)))
@@ -221,6 +221,9 @@ def main():
                     metavar="LEVEL", help="draft 模式对正文段落多轮润色"
                     "（需 LLM_API_KEY；conservative/standard/strong 三档；"
                     "输出带 <AI润色，请核对> 标记，失败回退原文）")
+    ap.add_argument("--ocr", action="store_true",
+                    help="对扫描件 PDF 启用 OCR 识别（需安装 pytesseract + pdf2image，"
+                         "未安装时优雅报错）")
     ap.add_argument("--dry-run", action="store_true",
                     help="仅检查输入可读性、模式和 LLM 外发清单，不调用外部服务或生成产物")
     ap.add_argument("--yes", action="store_true",
@@ -244,7 +247,7 @@ def main():
 
     print("=" * 56)
     print("① 读取源文件")
-    docs, errors = gather_docs(args.input)
+    docs, errors = gather_docs(args.input, ocr=args.ocr)
     if not docs:
         print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/Markdown/JSON/Excel/图片"
               "放进 input/ 后重试。")
