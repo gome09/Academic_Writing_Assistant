@@ -116,7 +116,7 @@ WORD_SPEC = {
 
     # ---- 参考文献 ----
     "reference": {
-        "standard": "GB/T 7714",   # 暂未落实
+        "standard": "GB/T 7714",   # 著录样式：GB/T 7714 | APA | MLA | Chicago（T1-2 已落实）
         "title": "参考文献",
     },
 }

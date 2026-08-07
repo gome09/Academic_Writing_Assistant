@@ -33,7 +33,8 @@ from config.format_spec import REFS_SPEC
 from src.llm_enhancer import AI_MARK, _chat_json
 from src.organizer import PLACEHOLDER, _node
 from src.references import (entry_from_card, extract_local_metadata,
-                            format_gbt, lookup_crossref, validate_citations)
+                            format_reference,
+                            lookup_crossref, validate_citations)
 
 _VALID_KINDS = {"intro", "review", "core", "conclusion"}
 _MEDIA_TYPES = ("xlsx", "csv", "image")
@@ -111,9 +112,11 @@ def make_cards(ref_docs: list, degraded: list | None = None) -> list:
             data = _chat_json(
                 _CARD_SYS,
                 '请以 JSON 输出 {"title": "...", "authors": ["..."], '
-                '"year": "...", "topic": "一句话主题", "method": "...", '
+                '"year": "...", "type": "J|M|C|D", '
+                '"topic": "一句话主题", "method": "...", '
                 '"conclusion": "...", "quotes": ["可直接引用的关键观点"]}：'
-                "\n\n" + _doc_text(d))
+                "\n（type 依据文献性质：J=期刊 M=专著 C=会议论文 D=学位论文）\n\n"
+                + _doc_text(d))
             if not isinstance(data, dict):
                 raise ValueError("摘要卡结果不是 JSON 对象")
             cards.append({
@@ -122,6 +125,7 @@ def make_cards(ref_docs: list, degraded: list | None = None) -> list:
                            [str(a).strip() for a in data.get("authors") or []
                             if str(a).strip()],
                 "year": str(local.get("year") or data.get("year") or "").strip(),
+                "type": str(data.get("type") or "").strip().upper()[:1] or "",
                 "topic": str(data.get("topic") or "").strip(),
                 "method": str(data.get("method") or "").strip(),
                 "conclusion": str(data.get("conclusion") or "").strip(),
@@ -446,7 +450,10 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
 
     attach_media(chapters, media_docs, img_notes)
     reference_entries = [entry_from_card(c, c.get("_local_meta")) for c in cards]
-    references = [format_gbt(entry) for entry in reference_entries]
+    # T1-2：按 WORD_SPEC 配置的著录样式格式化（默认 GB/T 7714，可选 APA/MLA/Chicago）
+    from config.format_spec import WORD_SPEC
+    ref_standard = WORD_SPEC.get("reference", {}).get("standard", "GB/T 7714")
+    references = [format_reference(entry, ref_standard) for entry in reference_entries]
 
     if degraded:
         print(f"  [提示] 本次共 {len(degraded)} 步降级，请检查上方告警。")

@@ -6,6 +6,8 @@ import json
 import logging
 import os
 import re
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -51,13 +53,36 @@ def extract_local_metadata(doc: dict) -> dict:
     }
 
 
+def _detect_type(card: dict, local: dict | None = None) -> str:
+    """启发式文献类型识别（T1-1）：有出版社→M、有会议名→C、有学位授予单位→D、默认→J。
+
+    仅依据已有字段推断，不调用 LLM 不编造；card.type 优先（来自 LLM 或上游显式指定）。
+    """
+    local = local or {}
+    if card.get("type"):
+        return str(card["type"]).strip().upper()[:1] or "J"
+    # 学位论文：有学位授予单位/学校字段
+    for key in ("degree_grantor", "university", "school", "institution"):
+        if card.get(key) or local.get(key):
+            return "D"
+    # 会议论文：有会议名
+    for key in ("conference", "meeting", "proceedings"):
+        if card.get(key) or local.get(key):
+            return "C"
+    # 专著：有出版社但无期刊名
+    if (card.get("publisher") or local.get("publisher")) and not (
+            card.get("journal") or local.get("journal")):
+        return "M"
+    return "J"
+
+
 def entry_from_card(card: dict, local: dict | None = None) -> dict:
     local = local or {}
     return {
         "title": local.get("title") or card.get("title") or card.get("source", ""),
         "authors": list(local.get("authors") or card.get("authors") or []),
         "year": local.get("year") or card.get("year") or "",
-        "type": card.get("type") or "J",
+        "type": _detect_type(card, local),
         "journal": card.get("journal") or "",
         "publisher": card.get("publisher") or "",
         "volume": card.get("volume") or "",
@@ -99,6 +124,119 @@ def format_gbt(entry: dict) -> str:
     return f"{authors}. {title}[{kind}]. " + ", ".join(tail) + "."
 
 
+# ---------------------------------------------------------------------------
+#  T1-2：多样式参考文献著录（APA / MLA / Chicago）
+#  全部由本地代码确定性生成，不交给 LLM 排版（红线：格式确定性）。
+# ---------------------------------------------------------------------------
+def _fmt_authors_apa(authors: list) -> str:
+    """APA 作者格式：Last, F. M.，多作者用 & 连接末位。"""
+    out = []
+    for a in authors:
+        if not a:
+            continue
+        parts = a.replace(",", " ").split()
+        if len(parts) == 1:
+            out.append(parts[0])
+        else:
+            last = parts[0]
+            initials = ". ".join(p[0] for p in parts[1:] if p) + "."
+            out.append(f"{last}, {initials}")
+    if not out:
+        return "«请补全作者»"
+    if len(out) == 1:
+        return out[0]
+    return ", ".join(out[:-1]) + ", & " + out[-1]
+
+
+def format_apa(entry: dict) -> str:
+    """APA 7th：Author. (Year). Title. Journal, Vol(Iss), Pages. DOI"""
+    authors = _fmt_authors_apa(entry.get("authors", []))
+    year = entry.get("year") or "«请补全年份»"
+    title = entry.get("title") or "«请补全题名»"
+    parts = [f"{authors} ({year}). {title}."]
+    if entry.get("journal"):
+        j = entry["journal"]
+        vi = ""
+        if entry.get("volume"):
+            vi += str(entry["volume"])
+            if entry.get("issue"):
+                vi += f"({entry['issue']})"
+        if entry.get("pages"):
+            vi += f", {entry['pages']}" if vi else str(entry["pages"])
+        parts.append(f"{j}" + (f", {vi}" if vi else "") + ".")
+    elif entry.get("publisher"):
+        parts.append(f"{entry['publisher']}.")
+    if entry.get("doi"):
+        parts.append(f"https://doi.org/{entry['doi']}")
+    return " ".join(parts)
+
+
+def format_mla(entry: dict) -> str:
+    """MLA 9th：Author. "Title." Journal, vol. V, no. I, Year, pp. Pages."""
+    authors = entry.get("authors", [])
+    author_str = ", ".join(a for a in authors if a) or "«请补全作者»"
+    title = entry.get("title") or "«请补全题名»"
+    parts = [f'{author_str}. "{title}."']
+    seg = []
+    if entry.get("journal"):
+        seg.append(entry["journal"])
+    if entry.get("volume"):
+        seg.append(f"vol. {entry['volume']}")
+    if entry.get("issue"):
+        seg.append(f"no. {entry['issue']}")
+    if entry.get("year"):
+        seg.append(str(entry["year"]))
+    if entry.get("pages"):
+        seg.append(f"pp. {entry['pages']}")
+    if seg:
+        parts.append(", ".join(seg) + ".")
+    if entry.get("publisher") and not entry.get("journal"):
+        parts.append(f"{entry['publisher']}.")
+    if entry.get("doi"):
+        parts.append(f"https://doi.org/{entry['doi']}.")
+    return " ".join(parts)
+
+
+def format_chicago(entry: dict) -> str:
+    """Chicago Author-Date：Author. Year. "Title." Journal Vol (Iss): Pages."""
+    authors = entry.get("authors", [])
+    author_str = ", ".join(a for a in authors if a) or "«请补全作者»"
+    year = entry.get("year") or "«请补全年份»"
+    title = entry.get("title") or "«请补全题名»"
+    parts = [f'{author_str}. {year}. "{title}."']
+    if entry.get("journal"):
+        loc = entry["journal"]
+        if entry.get("volume"):
+            loc += f" {entry['volume']}"
+            if entry.get("issue"):
+                loc += f" ({entry['issue']})"
+        if entry.get("pages"):
+            loc += f": {entry['pages']}"
+        parts.append(loc + ".")
+    elif entry.get("publisher"):
+        parts.append(f"{entry['publisher']}.")
+    if entry.get("doi"):
+        parts.append(f"https://doi.org/{entry['doi']}")
+    return " ".join(parts)
+
+
+_FORMATTERS = {
+    "GB/T 7714": format_gbt,
+    "APA": format_apa,
+    "MLA": format_mla,
+    "Chicago": format_chicago,
+}
+
+
+def format_reference(entry: dict, standard: str = "GB/T 7714") -> str:
+    """按指定著录样式格式化文献条目（T1-2 分发器）。
+
+    确定性本地生成，不调用 LLM。未知样式回退 GB/T 7714。
+    """
+    fn = _FORMATTERS.get(standard, format_gbt)
+    return fn(entry)
+
+
 def validate_citations(paragraphs: list[str], allowed_ids: set[int], total: int) -> list[str]:
     issues = []
     found = False
@@ -117,7 +255,11 @@ def validate_citations(paragraphs: list[str], allowed_ids: set[int], total: int)
 
 
 def lookup_crossref(title: str, doi: str = "", cache_path: str | None = None) -> dict:
-    """Optional explicit Crossref lookup; never called by default."""
+    """Optional explicit Crossref lookup; never called by default.
+
+    T1-3：网络异常（超时/URLError/HTTPError/JSON 错误）不中断流程，
+    指数退避重试 1 次后仍失败则返回空字典（降级为跳过）。
+    """
     cache = {}
     if cache_path and os.path.isfile(cache_path):
         try:
@@ -136,8 +278,25 @@ def lookup_crossref(title: str, doi: str = "", cache_path: str | None = None) ->
     url = "https://api.crossref.org/works?" + urllib.parse.urlencode(query)
     _logger.info("Crossref 查询：%s", url)
     req = urllib.request.Request(url, headers={"User-Agent": "thesis-project/1.0"})
-    with urllib.request.urlopen(req, timeout=10) as response:  # noqa: S310
-        data = json.load(response)
+
+    data = None
+    for attempt in range(2):  # 最多 2 次（初始 + 1 次退避重试）
+        try:
+            with urllib.request.urlopen(req, timeout=10) as response:  # noqa: S310
+                data = json.load(response)
+            break
+        except (urllib.error.URLError, urllib.error.HTTPError,
+                OSError, ValueError) as exc:
+            if attempt == 0:
+                _logger.warning("Crossref 查询失败（%s），1s 后重试：%s",
+                                type(exc).__name__, exc)
+                time.sleep(1)
+                continue
+            _logger.warning("Crossref 查询重试仍失败，跳过：%s", exc)
+            return {}
+
+    if data is None:
+        return {}
     items = data.get("message", {}).get("items", [])
     result = items[0] if items else {}
     if cache_path:

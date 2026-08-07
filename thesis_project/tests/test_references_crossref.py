@@ -123,18 +123,55 @@ def test_title_query_uses_bibliographic(tmp_path, monkeypatch):
 
 
 def test_network_error_returns_empty(tmp_path, monkeypatch):
-    """网络超时/URLError -> 不中断，返回空字典（当前实现未包 try/except，
-    此测试验证期望行为——T1-3 将加 try/except 使其优雅降级）。"""
+    """T1-3：网络超时/URLError -> 不中断，重试 1 次后仍失败返回空字典。"""
     cache = tmp_path / "cache.json"
 
     def fake_urlopen(req, timeout=10):
         raise URLError("timeout")
 
     monkeypatch.setattr(references.urllib.request, "urlopen", fake_urlopen)
-    # 当前 lookup_crossref 不包 try/except，URLError 会抛出
-    # T1-3 修复后此断言改为 == {}
-    with pytest.raises(URLError):
-        references.lookup_crossref("Fail", cache_path=str(cache))
+    monkeypatch.setattr(references.time, "sleep", lambda s: None)  # 跳过退避等待
+    result = references.lookup_crossref("Fail", cache_path=str(cache))
+    assert result == {}
+
+
+def test_network_retry_then_succeeds(tmp_path, monkeypatch):
+    """T1-3：首次失败，重试后成功返回结果。"""
+    cache = tmp_path / "cache.json"
+    item = _make_crossref_item(title="Retry Success")
+    attempts = []
+
+    def fake_urlopen(req, timeout=10):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise URLError("transient")
+        return _FakeResponse({"message": {"items": [item]}})
+
+    monkeypatch.setattr(references.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(references.time, "sleep", lambda s: None)
+    result = references.lookup_crossref("Retry Success", cache_path=str(cache))
+    assert result == item
+    assert len(attempts) == 2
+
+
+def test_json_error_returns_empty(tmp_path, monkeypatch):
+    """T1-3：响应不是合法 JSON -> 降级返回空字典。"""
+    cache = tmp_path / "cache.json"
+
+    class _BadResponse:
+        def __enter__(self):
+            return io.BytesIO(b"NOT JSON {{{")
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=10):
+        return _BadResponse()
+
+    monkeypatch.setattr(references.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(references.time, "sleep", lambda s: None)
+    result = references.lookup_crossref("Bad JSON", cache_path=str(cache))
+    assert result == {}
 
 
 def test_empty_items_returns_empty(tmp_path, monkeypatch):

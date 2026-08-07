@@ -26,7 +26,7 @@ thesis_project/
 │   ├── docx_builder.py    # 按规范生成 .docx
 │   ├── pptx_builder.py    # 按规范生成 .pptx
 │   ├── synthesizer.py     # refs 模式：题目+文献 -> 综述/大纲/写作要点
-│   ├── references.py      # 参考文献元数据抽取 + GB/T 7714 著录 + 引用校验
+│   ├── references.py      # 参考文献元数据抽取 + 多样式著录(GB/T 7714/APA/MLA/Chicago) + 引用校验
 │   ├── llm_enhancer.py    # LLM 增强（可选，失败自动回退规则结果）
 │   ├── llm_vision.py      # 图片理解（可选，LLM_VISION_MODEL）
 │   ├── logging_setup.py   # 文件日志（output/运行日志.log，当前只记 PPT 告警）
@@ -197,7 +197,7 @@ python src/main.py --llm
 - 正文：宋体 / Times New Roman、小四(12pt)、固定行距 20 磅、首行缩进 2 字符、两端对齐
 - 标题 1/2/3：黑体 三号(16)/四号(14)/13pt，套用内置样式 → **可自动生成目录**
 - 摘要（小二加粗居中）、关键词、英文摘要、目录域（打开文档后按提示更新域，或按 **F9**）、页码
-- 参考文献：普通草案模式**保留源条目原样**并编号，不做 GB/T 7714 转换；源文件里识别不到任何参考文献时会插入一条示例兜底条目（含 `<请替换为真实文献>`）。参考资料模式才按 GB/T 7714 确定性格式化，缺失字段保留占位符
+- 参考文献：普通草案模式**保留源条目原样**并编号，不做格式转换；源文件里识别不到任何参考文献时会插入一条示例兜底条目（含 `<请替换为真实文献>`）。参考资料模式按 `reference.standard`（默认 GB/T 7714，可选 APA/MLA/Chicago）确定性格式化，缺失字段保留占位符；文献类型依据字段启发式识别（J/M/C/D）
 - 附录：标题以「附录」开头的章会被移到参考文献之后，并重编号为「附录A」「附录B」…
 
 ### PPT（答辩）
@@ -230,5 +230,8 @@ ppt:
 `format_spec.py` 中标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则、`figure.caption_position`、
 `figure/table.number_by_chapter`、`table.style` 等）仅作文档参考，修改不会影响产物。
 与之相对，`table.caption_position`、`figure/table.caption_align` 以及页面方向、
-PPT 内容比例、媒体分页等字段是真实生效的，可通过 YAML 模板或配置文件调整。`PPT_SPEC["structure"]` 的标题和页数范围只用于分区页数校验与告警，
+PPT 内容比例、媒体分页等字段是真实生效的，可通过 YAML 模板或配置文件调整。
+`reference.standard` 现支持 `GB/T 7714`（默认）、`APA`、`MLA`、`Chicago` 四种著录样式，
+切换后参考资料模式的参考文献条目随之变化（普通草案模式保留源条目原样）。
+`PPT_SPEC["structure"]` 的标题和页数范围只用于分区页数校验与告警，
 不会改变 `organizer.py` 固定生成的 PPT 分区、顺序或标题。
