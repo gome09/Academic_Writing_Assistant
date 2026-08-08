@@ -39,7 +39,7 @@
 
 `organizer.py` 负责元信息抽取、章节树重建、特殊章节处理、无标题文档骨架回退和 PPT 分区映射。附录章在此被标记为 `section_role="appendix"`，由 `docx_builder.py` 移到参考文献之后并重编号为「附录A/B…」。`draft` 模式的 LLM 增强步骤只在显式传入 `--llm` 时执行，并在单步失败时保留规则结果；但 `llm_enhancer.py` 模块本身两种模式都会加载——`refs` 用它做前置可用性检查，并复用 `_chat_json` 作为唯一的 LLM 网络出口。
 
-`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖；`config/template.py` 负责深度合并并对未知字段、类型错误和负数报错。`PPT_SPEC["structure"]` 现驱动 `organizer.py` 生成分区/顺序/标题（T2-1），默认仍为 7 段，可用 YAML 自定义增减；其页数范围仍只用于校验与告警。PPT 侧另有硬性截断：表格超过 8 行会由 `organizer.py` 拆页，`pptx_builder.py` 最终只渲染前 8 行 6 列并告警。
+`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖；`config/template.py` 负责深度合并并对未知字段、类型错误和负数报错。`PPT_SPEC["structure"]` 现驱动 `organizer.py` 生成分区/顺序/标题（T2-1），默认仍为 7 段，可用 YAML 自定义增减；其页数范围仍只用于校验与告警。PPT 侧另有硬性截断：表格超过 8 行会由 `organizer.py` 拆页，`pptx_builder.py` 最终只渲染前 8 行 6 列并告警。`PPT_SPEC["layout"]["chart_from_table"]`（默认关，T2-6）开启后，可图表化表格（首列为类别、至少一列全数值）渲染为 python-pptx 原生柱状图，不可图表化或失败时回退表格；`image_placeholder`（默认关，T2-6）开启后无媒体内容页插入配图占位框与基于标题的图题建议，不依赖文生图。
 
 构建器已插件化（T4-4）：`src/builders/base.py` 定义 `Builder` 抽象基类与 `BUILDERS` 注册表，`docx_builder` / `pptx_builder` 通过适配器（`WordBuilder` / `PptBuilder`）注册为 `word` / `ppt`。`main.py` 的 `--only` choices 与 draft 生成循环取自注册表，第三方可注册新输出目标（如 HTML/Markdown）而无需改分发逻辑；refs 模式仍显式只用 `word` 构建器。
 

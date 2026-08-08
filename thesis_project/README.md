@@ -256,6 +256,11 @@ ppt:
 PPT 布局参数（`table_max_rows`/`table_max_cols`/`chars_per_line_text`/`chars_per_line_media`）
 与 Word 图片宽度（`figure.width_cm`）、表格字号（`table.font_size_pt`）现可通过 YAML 调整（T2-3）。
 `principle.talk_minutes` 已落实（T2-5），演讲备注含预计讲解时长。
+`PPT_SPEC["layout"]["chart_from_table"]`（默认 `false`）开启后，可图表化的表格
+（首列为类别、至少一列全数值）会渲染为 python-pptx 原生柱状图替代纯文本表格；
+不可图表化或生成失败时回退为表格（T2-6）。`PPT_SPEC["layout"]["image_placeholder"]`
+（默认 `false`）开启后，无媒体的内容页会插入「配图占位」框并给出基于标题的图题建议，
+不强制依赖文生图，保持本地可用（T2-6）。两者均可通过 YAML 模板或配置文件调整。
 `format_spec.py` 中标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则、`figure.caption_position`、
 `figure/table.number_by_chapter`、`table.style` 等）仅作文档参考，修改不会影响产物。
 与之相对，`table.caption_position`、`figure/table.caption_align` 以及页面方向、

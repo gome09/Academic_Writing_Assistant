@@ -163,6 +163,8 @@ PPT_SPEC = {
         "table_max_cols": 6,           # T2-3：PPT 表格最多展示列数
         "chars_per_line_text": 44,     # T2-3：纯文本页每行字符数（行宽估算）
         "chars_per_line_media": 26,    # T2-3：含媒体页每行字符数
+        "chart_from_table": False,     # T2-6：可图表化的表格渲染为原生柱状图（默认关）
+        "image_placeholder": False,    # T2-6：无媒体内容页插入配图占位框（默认关）
     },
 
     # ---- 结构（15~20 页；问题->方法->结果->启示）----

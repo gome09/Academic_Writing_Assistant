@@ -23,6 +23,8 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.oxml.ns import qn
 
 from config.format_spec import PPT_SPEC as P
@@ -188,7 +190,9 @@ def _slide_content(prs, s, warnings=None):
     media = s.get("media") or []
     has_media = bool(media)
     max_content = W_IN * P["layout"].get("content_max_ratio", 0.66)
-    text_width = 6.0 if has_media else min(W_IN - 2.0, max_content)
+    # T2-6：开启 image_placeholder 时，无媒体页也预留右侧配图区
+    reserve_media = has_media or P["layout"].get("image_placeholder", False)
+    text_width = 6.0 if reserve_media else min(W_IN - 2.0, max_content)
     tf = _textbox(slide, 1.0, 1.8, text_width, H_IN - 2.6)
     bullets = s["bullets"][:P["layout"]["max_bullets_per_slide"]]
     for i, b in enumerate(bullets):
@@ -201,7 +205,80 @@ def _slide_content(prs, s, warnings=None):
         _set_font(r, SZ["body_pt"], TEXT)
     if has_media:
         _render_media(slide, media[0], 7.2, 1.9, 5.4, 4.8, warnings)
+    elif P["layout"].get("image_placeholder", False):
+        # T2-6：无媒体内容页插入配图占位框 + 图题建议（不强制文生图，保持本地可用）
+        ptf = _textbox(slide, 7.2, 1.9, 5.4, 4.8, MSO_ANCHOR.MIDDLE)
+        p0 = ptf.paragraphs[0]; p0.alignment = PP_ALIGN.CENTER
+        r0 = p0.add_run(); r0.text = "[ 配图占位 ]"
+        _set_font(r0, SZ["caption_pt"], ACCENT, bold=True)
+        p1 = ptf.add_paragraph(); p1.alignment = PP_ALIGN.CENTER
+        r1 = p1.add_run()
+        r1.text = f"建议在此处插入与「{s['title']}」相关的示意图"
+        _set_font(r1, SZ["caption_pt"], MUTED)
     return slide
+
+
+def _try_float(value):
+    """尝试解析数值（容错千分位逗号与百分号）；失败返回 None。"""
+    try:
+        return float(str(value).replace(",", "").replace("%", "").strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _table_is_chartable(rows):
+    """启发式判断表格是否适合渲染为原生图表（T2-6）。
+
+    条件：≥3 行（含表头）、≥2 列、首列为类别标签、至少一列其余列在所有数据行
+    中均可解析为数值。保守判定，避免把普通文字表误转为图表。
+    """
+    if len(rows) < 3:
+        return False
+    n_cols = max(len(r) for r in rows)
+    if n_cols < 2:
+        return False
+    for ci in range(1, n_cols):
+        vals = [_try_float(row[ci]) if ci < len(row) else None
+                for row in rows[1:]]
+        if vals and all(v is not None for v in vals):
+            return True
+    return False
+
+
+def _render_chart(slide, rows, left, top, width, height, warnings=None):
+    """将表格渲染为 python-pptx 原生柱状图（T2-6）。
+
+    首列为类别，首个全数值列为系列；失败时告警并回退由调用方处理。
+    """
+    if warnings is None:
+        warnings = []
+    chart_data = CategoryChartData()
+    chart_data.categories = [str(row[0]) for row in rows[1:]]
+    series_added = False
+    for ci in range(1, max(len(r) for r in rows)):
+        vals = [_try_float(row[ci]) if ci < len(row) else None
+                for row in rows[1:]]
+        if vals and all(v is not None for v in vals):
+            name = str(rows[0][ci]) if ci < len(rows[0]) else f"系列{ci}"
+            chart_data.add_series(name, vals)
+            series_added = True
+            break
+    if not series_added:
+        return False
+    try:
+        gframe = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(left), Inches(top),
+            Inches(width), Inches(height), chart_data)
+        chart = gframe.chart
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+        chart.has_title = True
+        chart.chart_title.text_frame.text = str(rows[0][0]) if rows[0] else ""
+        return True
+    except Exception as exc:  # noqa: BLE001
+        _warn(f"PPT 图表生成失败：{exc}", warnings)
+        return False
 
 
 def _render_media(slide, media, left, top, width, height, warnings=None):
@@ -225,6 +302,11 @@ def _render_media(slide, media, left, top, width, height, warnings=None):
     rows = media.get("rows") or []
     if not rows:
         return
+    # T2-6：可图表化表格且开启 chart_from_table 时渲染原生柱状图替代纯文本表格
+    if P["layout"].get("chart_from_table") and _table_is_chartable(rows):
+        if _render_chart(slide, rows, left, top, width, height, warnings):
+            return
+        # 图表生成失败则回退到表格渲染
     max_rows = P["layout"].get("table_max_rows", 8)
     max_cols = P["layout"].get("table_max_cols", 6)
     rows = rows[:max_rows]
