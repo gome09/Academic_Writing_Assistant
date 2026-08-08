@@ -597,19 +597,38 @@ def read_image(path: str) -> Document:
 # ---------------------------------------------------------------------------
 
 
-def read_file(path: str, ocr: bool = False, extract_images: bool = False) -> Document:
-    """按扩展名读取单个文件，返回统一 Document。"""
+def read_file(path: str, ocr: bool = False, extract_images: bool = False,
+              cache=None) -> Document:
+    """按扩展名读取单个文件，返回统一 Document。
+
+    cache 非 None 时启用增量缓存（T5-1）：同 path+哈希+选项命中则跳过重读。
+    """
     ext = os.path.splitext(path)[1].lower()
+    h = None
+    if cache is not None:
+        try:
+            from src.cache import file_hash  # 懒导入，保持 cache 为可选依赖
+            h = file_hash(path)
+        except OSError:
+            h = None
+        if h is not None:
+            cached = cache.get(path, h, ocr, extract_images)
+            if cached is not None:
+                return cached
     if ext == ".pdf":
-        return read_pdf(path, ocr=ocr, extract_images=extract_images)
-    reader = _READERS.get(ext)
-    if reader is None:
-        raise ValueError(f"不支持的文件类型：{ext}（{path}）")
-    return reader(path)
+        doc = read_pdf(path, ocr=ocr, extract_images=extract_images)
+    else:
+        reader = _READERS.get(ext)
+        if reader is None:
+            raise ValueError(f"不支持的文件类型：{ext}（{path}）")
+        doc = reader(path)
+    if cache is not None and h is not None:
+        cache.put(path, h, ocr, extract_images, doc)
+    return doc
 
 
 def read_dir_detailed(dir_path: str, ocr: bool = False,
-                      extract_images: bool = False):
+                      extract_images: bool = False, cache=None):
     """Return (documents, errors) while keeping per-file failure details."""
     docs = []
     errors = []
@@ -620,7 +639,8 @@ def read_dir_detailed(dir_path: str, ocr: bool = False,
         if os.path.splitext(name)[1].lower() not in _READERS:
             continue
         try:
-            docs.append(read_file(full, ocr=ocr, extract_images=extract_images))
+            docs.append(read_file(full, ocr=ocr,
+                                  extract_images=extract_images, cache=cache))
             print(f"  [读取] {name}")
         except Exception as e:  # noqa: BLE001
             print(f"  [跳过] {name}: {e}")

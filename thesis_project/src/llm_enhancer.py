@@ -42,12 +42,52 @@ def _client():
                   timeout=timeout, max_retries=max_retries)
 
 
+def _stream_enabled() -> bool:
+    """T5-2：是否启用流式输出（env LLM_STREAM=1，默认关）。"""
+    return os.environ.get("LLM_STREAM", "0") == "1"
+
+
+def _chat_stream(system: str, user: str, json_mode: bool = False) -> str:
+    """T5-2：流式调用，实时回显增量文本，返回完整文本。
+
+    与 _chat 同样的请求构造（含 json_mode 的 response_format），
+    但以 stream=True 消费增量 chunk：边到达边打印，最后拼成完整文本。
+    端点不支持流式或 json_mode+stream 组合时抛异常，由 _chat 降级为非流式。
+    """
+    kwargs = {"model": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
+              "messages": [{"role": "system", "content": system},
+                           {"role": "user", "content": user}],
+              "temperature": 0.2, "stream": True}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    stream = _client().chat.completions.create(**kwargs)
+    parts = []
+    for chunk in stream:
+        try:
+            delta = chunk.choices[0].delta.content
+        except (AttributeError, IndexError, TypeError):
+            delta = None
+        if delta:
+            parts.append(delta)
+            print(delta, end="", flush=True)
+    print()  # 流式回显结束换行
+    return "".join(parts)
+
+
 def _chat(system: str, user: str, json_mode: bool = False) -> str:
     """单轮对话，返回原始文本。唯一网络出口，便于测试打桩。
 
     json_mode=True 时尝试 response_format 强制 JSON 输出，
     端点不支持则自动降级为普通请求。
+    T5-2：LLM_STREAM=1 时优先流式回显，流式失败自动降级非流式。
     """
+    # T5-2：流式优先（可降级）。json_mode 的 response_format 不支持检测
+    # 复用下方非流式分支，故流式抛错时统一回退非流式完整逻辑。
+    if _stream_enabled():
+        try:
+            return _chat_stream(system, user, json_mode=json_mode)
+        except Exception as e:  # noqa: BLE001
+            print(f"  [LLM告警] 流式输出失败，降级非流式：{e}")
     kwargs = {"model": os.environ.get("LLM_MODEL", "gpt-4o-mini"),
               "messages": [{"role": "system", "content": system},
                            {"role": "user", "content": user}],

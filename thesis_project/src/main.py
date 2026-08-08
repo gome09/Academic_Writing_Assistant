@@ -38,10 +38,11 @@ DEFAULT_OUTPUT = os.path.join(ROOT, "output")
 _logger = logging.getLogger("thesis_project")
 
 
-def gather_docs(inputs, ocr=False, extract_images=False):
+def gather_docs(inputs, ocr=False, extract_images=False, cache=None):
     """读取所有输入，返回 (docs, errors)。
 
     errors 是 [(path, reason), ...]，调用方在 main() 末尾聚合打印。
+    cache 非 None 时启用增量缓存（T5-1），未变文件跳过重读。
     """
     docs = []
     errors = []
@@ -49,13 +50,13 @@ def gather_docs(inputs, ocr=False, extract_images=False):
         if os.path.isdir(item):
             print(f"[目录] {item}")
             dir_docs, dir_errors = read_dir_detailed(
-                item, ocr=ocr, extract_images=extract_images)
+                item, ocr=ocr, extract_images=extract_images, cache=cache)
             docs.extend(dir_docs)
             errors.extend(dir_errors)
         elif os.path.isfile(item):
             try:
                 docs.append(read_file(item, ocr=ocr,
-                                      extract_images=extract_images))
+                                      extract_images=extract_images, cache=cache))
                 print(f"  [读取] {os.path.basename(item)}")
             except Exception as e:  # noqa: BLE001
                 errors.append((item, str(e)))
@@ -262,6 +263,12 @@ def main():
                     help="允许参考资料模式查询 Crossref（默认离线）")
     ap.add_argument("--report", metavar="FILE",
                     help="运行报告 JSON 输出路径")
+    ap.add_argument("--cache", dest="cache", action="store_true",
+                    default=True,
+                    help="启用输入读取增量缓存（T5-1，默认开；未变文件跳过重读，"
+                         "缓存存于 .cache/reads.pkl）")
+    ap.add_argument("--no-cache", dest="cache", action="store_false",
+                    help="禁用增量缓存（每次全量重读）")
     args = ap.parse_args()
 
     if args.format_template:
@@ -277,8 +284,18 @@ def main():
 
     print("=" * 56)
     print("① 读取源文件")
+    # T5-1：增量读取缓存（dry-run 不读写缓存，遵循"不触网/不落产物"语义）。
+    # 禁用时 cache=None，read_file 行为完全不变。
+    cache = None
+    if args.cache and not args.dry_run:
+        from src.cache import ReadCache
+        cache = ReadCache(os.path.join(ROOT, ".cache", "reads.pkl"))
     docs, errors = gather_docs(args.input, ocr=args.ocr,
-                               extract_images=args.extract_pdf_images)
+                               extract_images=args.extract_pdf_images, cache=cache)
+    if cache is not None:
+        cache.save()
+        if cache.hits:
+            print(f"  [缓存] 命中 {cache.hits} 个未变文件，跳过重读。")
     if not docs:
         print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/Markdown/JSON/Excel/图片"
               "放进 input/ 后重试。")

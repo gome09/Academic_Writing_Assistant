@@ -85,6 +85,7 @@ python src/main.py --extract-pdf-images         # 提取 PDF 内嵌图片为 ima
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
 python src/main.py --search-literature          # refs 模式启用语义文献检索（OpenAlex/S2，默认关）
 python src/main.py --report 报告.json           # 自定义运行报告输出路径
+python src/main.py --no-cache                   # 禁用读取增量缓存（默认开，缓存于 .cache/reads.pkl）
 ```
 
 > **Windows 提示**：请用 `python`（不要用 `python3`，它可能是应用商店占位程序）。

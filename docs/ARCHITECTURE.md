@@ -8,7 +8,7 @@
 
 ```text
 输入文件
-  -> readers.py：统一 Document / blocks
+  -> readers.py：统一 Document / blocks（可选 cache.py：增量缓存未变文件）
   -> main.py：自动检测或 --mode 指定
        -> draft：organizer.py -> 可选 llm_enhancer.py -> docx_builder.py / pptx_builder.py
        -> refs： synthesizer.py -> references.py / 可选 llm_vision.py -> docx_builder.py
@@ -20,7 +20,8 @@
 - `auto`：存在 `topic.md`、`topic.txt`、`题目.md` 或 `题目.txt` 时进入 `refs`，否则进入 `draft`。
 - `draft`：生成 Word 与 PPT，可用 `--only` 限制产物；`--llm` 是可选增强。
 - `refs`：要求题目文件、至少一份参考资料和 `LLM_API_KEY`，只生成 Word。
-- `--dry-run`：检查文件可读性、模式与外发清单并写运行报告，不调用 LLM/Crossref，也不生成 Word/PPT；它不执行 `refs` 的题目、参考资料和 API 密钥前置校验。
+- `--dry-run`：检查文件可读性、模式与外发清单并写运行报告，不调用 LLM/Crossref，也不生成 Word/PPT；它不执行 `refs` 的题目、参考资料和 API 密钥前置校验，也不读写读取缓存。
+- `--cache`/`--no-cache`（T5-1）：读取增量缓存默认开启。`read_file` 以 `(路径, 内容 SHA256, ocr, extract_images)` 为键缓存 `Document`，未变文件二次运行直接命中、跳过重读；含 image 块的文档不缓存（避免大字节存储）；缓存持久化为 `thesis_project/.cache/reads.pkl`（版本号失效旧缓存）。`--dry-run` 不读写缓存。
 
 ## 输入模型
 

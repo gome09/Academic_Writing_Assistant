@@ -440,6 +440,8 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
         ch["kind"] = spec_ch["kind"]
         if spec_ch["kind"] == "review":
             ch["paras"].append("【提示】" + REFS_SPEC["review_notice"])
+            # T5-2：综述章为长文本生成，LLM_STREAM=1 时实时回显正文增量。
+            print(f"  [综述] 撰写《{spec_ch['title']}》…")
             ch["paras"].extend(write_review(spec_ch, topic, cards, degraded,
                                             validate=True))
         chapters.append(ch)
