@@ -167,7 +167,8 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
 
 
 def _confirm_llm_transfer(args, docs, required=False) -> bool:
-    if not (args.llm or args.polish or args.search_literature or required):
+    if not (args.llm or args.polish or args.proofread
+            or args.search_literature or required):
         return True
     if not os.environ.get("LLM_API_KEY"):
         return True
@@ -237,6 +238,9 @@ def main():
                     metavar="LEVEL", help="draft 模式对正文段落多轮润色"
                     "（需 LLM_API_KEY；conservative/standard/strong 三档；"
                     "输出带 <AI润色，请核对> 标记，失败回退原文）")
+    ap.add_argument("--proofread", action="store_true",
+                    help="draft 模式 AI 校对（检查错别字/语法/术语，"
+                         "仅输出建议不自动改写；需 LLM_API_KEY）")
     ap.add_argument("--ocr", action="store_true",
                     help="对扫描件 PDF 启用 OCR 识别（需安装 pytesseract + pdf2image，"
                          "未安装时优雅报错）")
@@ -282,13 +286,15 @@ def main():
         mode = "refs" if topic_doc is not None else "draft"
 
     if args.dry_run:
-        if args.llm or args.polish or args.search_literature or mode == "refs":
+        if args.llm or args.polish or args.proofread or args.search_literature \
+                or mode == "refs":
             _print_llm_transfer_summary(docs)
         from src.runtime_report import write_report
         write_report(args.report or os.path.join(args.output, "运行报告.json"),
                      {"status": "dry_run", "files": [d["source"] for d in docs],
                       "mode": mode,
                       "llm_requested": bool(args.llm or args.polish
+                                            or args.proofread
                                             or args.search_literature
                                             or mode == "refs")})
         print("  [dry-run] 已完成输入检查，未生成产物。")
@@ -314,6 +320,16 @@ def main():
         else:
             n = llm_enhancer.polish_paragraphs(thesis, args.polish)
             print(f"  [LLM] 润色完成，{n} 个段落已标记 <AI润色，请核对>。")
+    if args.proofread:
+        print("②+ AI 校对")
+        from src import llm_enhancer
+        if not llm_enhancer.is_available():
+            print("  [LLM] 未设置 LLM_API_KEY，跳过校对。")
+        else:
+            issues = llm_enhancer.proofread(thesis)
+            for issue in issues:
+                print(f"  [校对建议] {issue}")
+            print(f"  [LLM] 校对完成，共 {len(issues)} 条建议。")
     print(f"  论文：{len(thesis['chapters'])} 章；PPT：{len(deck['slides'])} 页。")
 
     print("③ 生成草案")
@@ -349,12 +365,19 @@ def main():
 
     print("=" * 56)
     _print_draft_completion(outputs)
+    # T3-5：AIGC 率提示——统计 AI 标记文本占比写入报告
+    from src.llm_enhancer import ai_text_ratio
+    ai_ratio = ai_text_ratio(thesis)
+    if ai_ratio["ai_marked_segments"] > 0:
+        print(f"  [AIGC提示] 论文中 {ai_ratio['ai_marked_segments']} 个段落"
+              f"（约 {ai_ratio['ai_chars']} 字符）带 AI 标记，"
+              f"占比 {ai_ratio['ratio']:.1%}，可能触发 AIGC 检测，请逐条核对改写。")
     from src.runtime_report import write_report
     write_report(args.report or os.path.join(args.output, "运行报告.json"),
                  {"status": "ok" if ok else "error", "mode": "draft",
                   "files": len(docs), "read_errors": errors,
                   "outputs": outputs, "llm": bool(args.llm),
-                  "warnings": ppt_warnings})
+                  "warnings": ppt_warnings, "ai_text_ratio": ai_ratio})
     return 0 if ok else 1
 
 

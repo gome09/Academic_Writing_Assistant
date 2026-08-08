@@ -35,9 +35,11 @@ def is_available() -> bool:
 def _client():
     from openai import OpenAI
     timeout = float(os.environ.get("LLM_TIMEOUT", "60"))
+    # T3-6：可配重试次数（默认 1，弱网可设 LLM_MAX_RETRIES=3）
+    max_retries = int(os.environ.get("LLM_MAX_RETRIES", "1"))
     return OpenAI(api_key=os.environ["LLM_API_KEY"],
                   base_url=os.environ.get("LLM_BASE_URL") or None,
-                  timeout=timeout, max_retries=1)
+                  timeout=timeout, max_retries=max_retries)
 
 
 def _chat(system: str, user: str, json_mode: bool = False) -> str:
@@ -481,3 +483,68 @@ def enhance(thesis: dict, deck: dict, docs: list):
     except Exception as e:  # noqa: BLE001
         print(f"  [LLM告警] 演讲备注失败：{e}")
     return thesis, deck
+
+
+# ---------------------------------------------------------------------------
+#  T3-2：AI 校对（可选 --proofread，仅建议不自动改写）
+# ---------------------------------------------------------------------------
+_PROOFREAD_SYS = ("你是学术校对助手。检查给定段落的错别字、语法错误和"
+                  "术语不一致，输出修订建议列表。不得改写原文，只指出问题和建议。"
+                  '只输出 JSON：{"issues": ["问题1", "问题2"]}')
+
+
+def proofread(thesis: dict) -> list[str]:
+    """T3-2：AI 校对——检查错别字/语法/术语，返回建议列表（不自动改原文）。
+
+    逐章检查正文段落，汇总所有建议。失败返回空列表。
+    """
+    from src.organizer import PLACEHOLDER
+    all_issues = []
+    for ch in thesis.get("chapters", []):
+        paras = [p for p in ch.get("paras", [])
+                 if p and p != PLACEHOLDER and len(p) >= 20
+                 and AI_MARK not in p and POLISH_MARK not in p]
+        if not paras:
+            continue
+        try:
+            text = "\n".join(f"[{i}] {p[:800]}" for i, p in enumerate(paras))
+            data = _chat_json(_PROOFREAD_SYS,
+                              '请以 JSON 输出 {"issues": ["问题1", ...]}：\n\n' + text)
+            if isinstance(data, dict) and isinstance(data.get("issues"), list):
+                for issue in data["issues"]:
+                    s = str(issue).strip()
+                    if s:
+                        all_issues.append(f"《{ch['title']}》{s}")
+        except Exception as e:  # noqa: BLE001
+            print(f"  [LLM告警] 《{ch['title']}》校对失败：{e}")
+    return all_issues
+
+
+# ---------------------------------------------------------------------------
+#  T3-5：AIGC 率提示（统计 AI 标记文本占比，写入运行报告）
+# ---------------------------------------------------------------------------
+def ai_text_ratio(thesis: dict) -> dict:
+    """T3-5：统计 AI 标记文本占比。
+
+    返回 {total_chars, ai_chars, ratio, ai_marks}。不做改写，仅告知。
+    """
+    total = 0
+    ai = 0
+    ai_marks = 0
+    for ch in thesis.get("chapters", []):
+        for p in ch.get("paras", []):
+            total += len(p)
+            if AI_MARK in p or POLISH_MARK in p:
+                ai += len(p)
+                ai_marks += 1
+    abstract = thesis.get("abstract", "") or ""
+    total += len(abstract)
+    if AI_MARK in abstract:
+        ai += len(abstract)
+        ai_marks += 1
+    return {
+        "total_chars": total,
+        "ai_chars": ai,
+        "ratio": round(ai / total, 3) if total else 0,
+        "ai_marked_segments": ai_marks,
+    }

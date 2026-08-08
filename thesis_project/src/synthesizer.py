@@ -41,6 +41,11 @@ _MEDIA_TYPES = ("xlsx", "csv", "image")
 
 _logger = logging.getLogger("thesis_project")
 
+# T3-3：统一散落的 _doc_text 截断阈值为可配常量（环境变量可覆盖）
+CARD_TEXT_LIMIT = int(os.environ.get("LLM_CARD_TEXT_LIMIT", "6000"))
+TOPIC_TEXT_LIMIT = int(os.environ.get("LLM_TOPIC_TEXT_LIMIT", "4000"))
+FALLBACK_TEXT_LIMIT = int(os.environ.get("LLM_FALLBACK_TEXT_LIMIT", "500"))
+
 
 def _note_degrade(step: str, err, degraded: list) -> None:
     """记录降级步骤到局部列表并打印告警（T0-4：不再依赖模块级全局）。"""
@@ -49,7 +54,7 @@ def _note_degrade(step: str, err, degraded: list) -> None:
     print(f"  [LLM告警] {step}失败，已降级：{err}")
 
 
-def _doc_text(doc: dict, limit: int = 6000) -> str:
+def _doc_text(doc: dict, limit: int = CARD_TEXT_LIMIT) -> str:
     """Document -> 纯文本（标题与段落顺序拼接，表格拍平），截断到 limit。"""
     parts = []
     for b in doc["blocks"]:
@@ -85,7 +90,7 @@ def parse_topic(topic_doc: dict) -> dict:
                 break
     return {"title": title or PLACEHOLDER,
             "author": (meta.get("author") or "").strip() or PLACEHOLDER,
-            "background": _doc_text(topic_doc, limit=4000)}
+            "background": _doc_text(topic_doc, limit=TOPIC_TEXT_LIMIT)}
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +144,7 @@ def make_cards(ref_docs: list, degraded: list | None = None) -> list:
             cards.append({"title": name, "authors": [], "year": "",
                           "topic": "", "method": "", "conclusion": "",
                           "quotes": [], "source": name, "_local_meta": local,
-                          "fallback_text": _doc_text(d, limit=500)})
+                          "fallback_text": _doc_text(d, limit=FALLBACK_TEXT_LIMIT)})
     return cards
 
 
