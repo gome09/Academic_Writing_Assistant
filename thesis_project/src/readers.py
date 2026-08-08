@@ -1,23 +1,11 @@
 # -*- coding: utf-8 -*-
 """
 多格式读取器 —— 读取 docx / pdf / txt / md / json，
-输出统一的中间结构 Document：
+输出统一的中间结构 Document。
 
-    Document = {
-        "source": "路径",
-        "type": "docx|pdf|txt|md|json",
-        "blocks": [ Block, ... ],   # 顺序保留
-        "meta": {...}               # 可选：从 json/frontmatter 提取的标题、作者等
-    }
-
-    Block = {
-        "kind": "heading|paragraph|list_item|table|code|image",
-        "level": int,        # heading 级别，非标题为 0
-        "text": "纯文本",
-        "rows": [[...]],     # 仅 table
-        "data": b"...",      # 仅 image：原始字节
-        "ext": ".png",       # 仅 image：扩展名
-    }
+契约由下方 Block / Document TypedDict 显式定义（T4-5），运行时仍为普通
+dict，TypedDict 仅作类型层契约与文档，完全向后兼容。历史隐式 dict 调用
+（b["kind"] / d["blocks"] 等）无需改动。
 
 设计原则：
   - 任何一种格式失败不影响其它格式；缺库时给出清晰提示。
@@ -27,12 +15,39 @@ from __future__ import annotations
 import json
 import os
 import re
+from typing import Any, Callable, NotRequired, TypedDict
+
+
+# ---------------------------------------------------------------------------
+#  统一数据契约（T4-5）
+#  运行时为普通 dict；此处 TypedDict 仅声明字段契约，便于类型检查与文档化。
+#  iter_node_blocks（organizer.py）兼容层仍按 dict 消费，可逐步迁移。
+# ---------------------------------------------------------------------------
+class Block(TypedDict):
+    """内容块契约。kind/level/text 为必填；rows/data/ext 按需出现。"""
+
+    kind: str           # heading|paragraph|list_item|table|code|image
+    level: int          # heading 级别，非标题为 0
+    text: str           # 纯文本（已 strip）；table/image 可为空串
+    # 以下字段 NotRequired：仅特定 kind 出现，运行时可能缺省
+    rows: NotRequired[Any]            # 仅 table：[[cell, ...], ...]
+    data: NotRequired[Any]            # 仅 image：原始字节
+    ext: NotRequired[Any]             # 仅 image：扩展名（如 ".png"）
+
+
+class Document(TypedDict):
+    """读取器统一输出。"""
+
+    source: str         # 文件路径
+    type: str           # docx|pdf|txt|md|json|xlsx|csv|image
+    blocks: list[Block]  # 顺序保留
+    meta: dict[str, Any]  # 可选：从 json/frontmatter/core_properties 提取的元信息
 
 
 # ---------------------------------------------------------------------------
 #  工具
 # ---------------------------------------------------------------------------
-def _block(kind, text="", level=0, rows=None):
+def _block(kind, text="", level=0, rows=None) -> Block:
     return {"kind": kind, "level": level, "text": text.strip(), "rows": rows}
 
 
@@ -63,9 +78,36 @@ def _read_text(path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+#  读取器注册（T4-3 插件化）
+#  _READERS 为扩展名 -> 读取函数 的注册表；第三方可用 register_reader 装饰器
+#  注册新读取器，无需修改核心分发逻辑。向后兼容：_READERS 仍是普通 dict，
+#  read_dir_detailed 的扩展名过滤与历史行为一致。
+# ---------------------------------------------------------------------------
+_READERS: dict[str, Callable[..., Document]] = {}
+
+
+def register_reader(*exts: str):
+    """装饰器：将读取函数注册到指定扩展名（T4-3）。
+
+    用法：
+        @register_reader(".md", ".markdown")
+        def read_md(path: str) -> Document: ...
+    注册后 read_file / read_dir_detailed 自动识别该扩展名。
+    """
+
+    def decorator(fn):
+        for ext in exts:
+            _READERS[ext] = fn
+        return fn
+
+    return decorator
+
+
+# ---------------------------------------------------------------------------
 #  TXT
 # ---------------------------------------------------------------------------
-def read_txt(path: str) -> dict:
+@register_reader(".txt", ".text")
+def read_txt(path: str) -> Document:
     raw = _read_text(path)
     blocks = []
     for para in re.split(r"\n\s*\n", raw):
@@ -78,7 +120,8 @@ def read_txt(path: str) -> dict:
 # ---------------------------------------------------------------------------
 #  Markdown
 # ---------------------------------------------------------------------------
-def read_md(path: str) -> dict:
+@register_reader(".md", ".markdown")
+def read_md(path: str) -> Document:
     raw = _read_text(path)
 
     meta = {}
@@ -142,7 +185,8 @@ def read_md(path: str) -> dict:
 # ---------------------------------------------------------------------------
 #  JSON —— 支持两类：结构化大纲 或 任意数据
 # ---------------------------------------------------------------------------
-def read_json(path: str) -> dict:
+@register_reader(".json")
+def read_json(path: str) -> Document:
     data = json.loads(_read_text(path))
 
     blocks = []
@@ -186,7 +230,8 @@ def read_json(path: str) -> dict:
 # ---------------------------------------------------------------------------
 #  DOCX
 # ---------------------------------------------------------------------------
-def read_docx(path: str) -> dict:
+@register_reader(".docx")
+def read_docx(path: str) -> Document:
     try:
         import docx  # python-docx
     except ImportError:
@@ -359,6 +404,8 @@ def _ensure_has_text(blocks: list, path: str, ocr: bool = False) -> None:
         return
     if any(b.get("kind") == "table" for b in blocks):
         return
+    if any(b.get("kind") == "image" for b in blocks):
+        return  # T4-2：已提取内嵌图片，视为有内容
     if ocr:
         try:
             ocr_blocks = _ocr_pdf(path)
@@ -378,7 +425,44 @@ def _ensure_has_text(blocks: list, path: str, ocr: bool = False) -> None:
         "或加 --ocr 启用内置 OCR（需安装 pytesseract + pdf2image）")
 
 
-def read_pdf(path: str, ocr: bool = False) -> dict:
+def _extract_pdf_images(path: str) -> tuple[list, int]:
+    """提取 PDF 内嵌图片为 image 块列表（T4-2）。
+
+    依赖 pypdf（可选依赖，未安装时返回 ([], -1) 标识不可用）。
+    pypdf 的 page.images 访问器返回 ImageFile，含 .data（原始字节）与 .name。
+    单张图提取失败不影响其它图。
+    """
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return [], -1
+    blocks = []
+    count = 0
+    try:
+        reader = PdfReader(path)
+        for page in reader.pages:
+            try:
+                images = page.images
+            except Exception:  # noqa: BLE001 —— 部分页无图片资源对象
+                continue
+            for img in images:
+                try:
+                    name = getattr(img, "name", "") or ""
+                    ext = os.path.splitext(name)[1].lower() or ".png"
+                    b = _block("image")
+                    b["data"] = img.data
+                    b["ext"] = ext
+                    blocks.append(b)
+                    count += 1
+                except Exception:  # noqa: BLE001 —— 跳过无法解码的单张图
+                    continue
+    except Exception:  # noqa: BLE001 —— 整体失败返回已提取部分
+        pass
+    return blocks, count
+
+
+@register_reader(".pdf")
+def read_pdf(path: str, ocr: bool = False, extract_images: bool = False) -> Document:
     blocks = []
     meta = {}
     try:
@@ -386,8 +470,8 @@ def read_pdf(path: str, ocr: bool = False) -> dict:
     except ImportError:
         pdfplumber = None
 
+    img_count = 0
     if pdfplumber is not None:
-        img_count = 0
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages:
                 img_count += len(page.images)
@@ -412,9 +496,6 @@ def read_pdf(path: str, ocr: bool = False) -> dict:
                 target = page.filter(_outside) if bboxes else page
                 txt = target.extract_text() or ""
                 _pdf_lines_to_blocks(txt, blocks)
-        if img_count:
-            print(f"  [提示] {os.path.basename(path)}：检测到 {img_count} 张图片，"
-                  "PDF 图片暂不导入，请在草案中手工补图")
     else:
         # 退化到 pypdf
         try:
@@ -426,6 +507,22 @@ def read_pdf(path: str, ocr: bool = False) -> dict:
             txt = page.extract_text() or ""
             _pdf_lines_to_blocks(txt, blocks)
 
+    # T4-2：可选提取 PDF 内嵌图片为 image 块（默认关，因可能量大）
+    if extract_images:
+        img_blocks, got = _extract_pdf_images(path)
+        if got < 0:
+            print(f"  [提示] {os.path.basename(path)}：未安装 pypdf，"
+                  "无法提取内嵌图片（pip install pypdf）")
+        elif got:
+            blocks.extend(img_blocks)
+            print(f"  [图片] {os.path.basename(path)}：提取 {got} 张内嵌图片为 image 块")
+        elif img_count:
+            print(f"  [提示] {os.path.basename(path)}：检测到 {img_count} 张图片，"
+                  "但未能提取为 image 块（可能为矢量或掩码图）")
+    elif img_count:
+        print(f"  [提示] {os.path.basename(path)}：检测到 {img_count} 张图片，"
+              "PDF 图片暂不导入；加 --extract-pdf-images 可提取内嵌图片")
+
     _ensure_has_text(blocks, path, ocr=ocr)
     return {"source": path, "type": "pdf", "blocks": blocks, "meta": meta}
 
@@ -433,7 +530,8 @@ def read_pdf(path: str, ocr: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 #  XLSX / CSV
 # ---------------------------------------------------------------------------
-def read_xlsx(path: str) -> dict:
+@register_reader(".xlsx")
+def read_xlsx(path: str) -> Document:
     """每个非空工作表 -> 一个 table 块。合并单元格的非锚点格读出 None -> ""。
 
     data_only=True 读公式的缓存计算值；文件从未被 Excel 打开过时可能为
@@ -461,7 +559,8 @@ def read_xlsx(path: str) -> dict:
     return {"source": path, "type": "xlsx", "blocks": blocks, "meta": {}}
 
 
-def read_csv(path: str) -> dict:
+@register_reader(".csv")
+def read_csv(path: str) -> Document:
     """整个 CSV -> 单个 table 块；全空行跳过。编码回退复用 _read_text。"""
     import csv
     import io
@@ -480,7 +579,8 @@ def read_csv(path: str) -> dict:
 # ---------------------------------------------------------------------------
 #  独立图片（截图等）
 # ---------------------------------------------------------------------------
-def read_image(path: str) -> dict:
+@register_reader(".png", ".jpg", ".jpeg", ".bmp", ".webp")
+def read_image(path: str) -> Document:
     """整个文件 -> 单个 image 块（原始字节 + 扩展名），供插图与视觉理解。"""
     with open(path, "rb") as f:
         data = f.read()
@@ -493,38 +593,23 @@ def read_image(path: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-#  分发
+#  分发（T4-3：读取器在定义处用 @register_reader 注册，此处无需静态字典）
 # ---------------------------------------------------------------------------
-_READERS = {
-    ".txt": read_txt,
-    ".text": read_txt,
-    ".md": read_md,
-    ".markdown": read_md,
-    ".json": read_json,
-    ".docx": read_docx,
-    ".pdf": read_pdf,
-    ".xlsx": read_xlsx,
-    ".csv": read_csv,
-    ".png": read_image,
-    ".jpg": read_image,
-    ".jpeg": read_image,
-    ".bmp": read_image,
-    ".webp": read_image,
-}
 
 
-def read_file(path: str, ocr: bool = False) -> dict:
+def read_file(path: str, ocr: bool = False, extract_images: bool = False) -> Document:
     """按扩展名读取单个文件，返回统一 Document。"""
     ext = os.path.splitext(path)[1].lower()
     if ext == ".pdf":
-        return read_pdf(path, ocr=ocr)
+        return read_pdf(path, ocr=ocr, extract_images=extract_images)
     reader = _READERS.get(ext)
     if reader is None:
         raise ValueError(f"不支持的文件类型：{ext}（{path}）")
     return reader(path)
 
 
-def read_dir_detailed(dir_path: str, ocr: bool = False):
+def read_dir_detailed(dir_path: str, ocr: bool = False,
+                      extract_images: bool = False):
     """Return (documents, errors) while keeping per-file failure details."""
     docs = []
     errors = []
@@ -535,7 +620,7 @@ def read_dir_detailed(dir_path: str, ocr: bool = False):
         if os.path.splitext(name)[1].lower() not in _READERS:
             continue
         try:
-            docs.append(read_file(full, ocr=ocr))
+            docs.append(read_file(full, ocr=ocr, extract_images=extract_images))
             print(f"  [读取] {name}")
         except Exception as e:  # noqa: BLE001
             print(f"  [跳过] {name}: {e}")

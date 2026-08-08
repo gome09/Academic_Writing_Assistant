@@ -31,13 +31,17 @@
 - 表格：`.xlsx`、`.csv`
 - 图片：`.png`、`.jpg`、`.jpeg`、`.bmp`、`.webp`
 
-统一内容块的 `kind` 取值为 `heading`、`paragraph`、`list_item`、`table`、`code`、`image`。Word 内嵌图片会被提取；PDF 依赖文本层，其内嵌图片一律不导入（只打印提示），扫描版 PDF 不做 OCR 并直接报错。`.xlsx` 的每个非空工作表各成一个表格块，`.csv` 整份文件只产出一个表格块。
+统一内容块的 `kind` 取值为 `heading`、`paragraph`、`list_item`、`table`、`code`、`image`。`Block` / `Document` 以 `TypedDict` 显式定义契约（T4-5），运行时仍为普通 dict：`kind`/`level`/`text` 必填，`rows`/`data`/`ext` 按需出现。Word 内嵌图片会被提取；PDF 依赖文本层，其内嵌图片默认不导入（只打印提示），加 `--extract-pdf-images` 可用 pypdf 提取为 image 块（默认关，可选依赖，未安装时优雅降级）；扫描版 PDF 默认报错，加 `--ocr` 可启用 OCR（T4-1，可选依赖）。`.xlsx` 的每个非空工作表各成一个表格块，`.csv` 整份文件只产出一个表格块。
+
+读取器已插件化（T4-3）：`_READERS` 是扩展名→读取函数的注册表，各 `read_*` 在定义处用 `@register_reader` 装饰器注册，第三方可注册新格式而无需改核心分发。
 
 ## 普通草案管道
 
 `organizer.py` 负责元信息抽取、章节树重建、特殊章节处理、无标题文档骨架回退和 PPT 分区映射。附录章在此被标记为 `section_role="appendix"`，由 `docx_builder.py` 移到参考文献之后并重编号为「附录A/B…」。`draft` 模式的 LLM 增强步骤只在显式传入 `--llm` 时执行，并在单步失败时保留规则结果；但 `llm_enhancer.py` 模块本身两种模式都会加载——`refs` 用它做前置可用性检查，并复用 `_chat_json` 作为唯一的 LLM 网络出口。
 
-`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖；`config/template.py` 负责深度合并并对未知字段、类型错误和负数报错。`PPT_SPEC["structure"]` 只供 `pptx_builder.py` 校验分区页数并产生告警，不改变 `organizer.py` 固定生成的分区、顺序或标题。PPT 侧另有硬性截断：表格超过 8 行会由 `organizer.py` 拆页，`pptx_builder.py` 最终只渲染前 8 行 6 列并告警。
+`docx_builder.py` 与 `pptx_builder.py` 消费整理后的结构数据。格式以 `config/format_spec.py` 为默认值，可通过 `--format-template` 加载 YAML 深度覆盖；`config/template.py` 负责深度合并并对未知字段、类型错误和负数报错。`PPT_SPEC["structure"]` 现驱动 `organizer.py` 生成分区/顺序/标题（T2-1），默认仍为 7 段，可用 YAML 自定义增减；其页数范围仍只用于校验与告警。PPT 侧另有硬性截断：表格超过 8 行会由 `organizer.py` 拆页，`pptx_builder.py` 最终只渲染前 8 行 6 列并告警。
+
+构建器已插件化（T4-4）：`src/builders/base.py` 定义 `Builder` 抽象基类与 `BUILDERS` 注册表，`docx_builder` / `pptx_builder` 通过适配器（`WordBuilder` / `PptBuilder`）注册为 `word` / `ppt`。`main.py` 的 `--only` choices 与 draft 生成循环取自注册表，第三方可注册新输出目标（如 HTML/Markdown）而无需改分发逻辑；refs 模式仍显式只用 `word` 构建器。
 
 `format_spec.py` 中有一批字段当前不被任何构建器消费，修改它们不会影响产物：除标注 `暂未落实` 者外，还包括 `figure.caption_position`（图题恒在图下）、`figure.number_by_chapter` 与 `table.number_by_chapter`（编号恒为 `章-序`）、`table.style`（恒用三线表）。同层的 `table.caption_position` 与 `figure/table.caption_align` 则是真实生效的。
 

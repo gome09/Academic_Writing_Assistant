@@ -74,7 +74,7 @@ def test_read_file_passes_ocr_to_pdf(monkeypatch, tmp_path):
     """read_file(path, ocr=True) 把 ocr 传给 read_pdf。"""
     received_ocr = []
 
-    def fake_read_pdf(path, ocr=False):
+    def fake_read_pdf(path, ocr=False, extract_images=False):
         received_ocr.append(ocr)
         return {"source": path, "type": "pdf", "blocks": [], "meta": {}}
 
@@ -90,7 +90,7 @@ def test_read_file_no_ocr_by_default(monkeypatch, tmp_path):
     """默认 ocr=False。"""
     received_ocr = []
 
-    def fake_read_pdf(path, ocr=False):
+    def fake_read_pdf(path, ocr=False, extract_images=False):
         received_ocr.append(ocr)
         return {"source": path, "type": "pdf", "blocks": [], "meta": {}}
 

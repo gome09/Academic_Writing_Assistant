@@ -27,7 +27,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.readers import read_file, read_dir_detailed
 from src.organizer import organize
-from src import docx_builder, pptx_builder
+from src import pptx_builder
+from src.builders import BUILDERS, builder_names
 from config.format_spec import REFS_SPEC
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,7 +38,7 @@ DEFAULT_OUTPUT = os.path.join(ROOT, "output")
 _logger = logging.getLogger("thesis_project")
 
 
-def gather_docs(inputs, ocr=False):
+def gather_docs(inputs, ocr=False, extract_images=False):
     """读取所有输入，返回 (docs, errors)。
 
     errors 是 [(path, reason), ...]，调用方在 main() 末尾聚合打印。
@@ -47,12 +48,14 @@ def gather_docs(inputs, ocr=False):
     for item in inputs:
         if os.path.isdir(item):
             print(f"[目录] {item}")
-            dir_docs, dir_errors = read_dir_detailed(item, ocr=ocr)
+            dir_docs, dir_errors = read_dir_detailed(
+                item, ocr=ocr, extract_images=extract_images)
             docs.extend(dir_docs)
             errors.extend(dir_errors)
         elif os.path.isfile(item):
             try:
-                docs.append(read_file(item, ocr=ocr))
+                docs.append(read_file(item, ocr=ocr,
+                                      extract_images=extract_images))
                 print(f"  [读取] {os.path.basename(item)}")
             except Exception as e:  # noqa: BLE001
                 errors.append((item, str(e)))
@@ -147,7 +150,7 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
         search_cards=search_cards)
     print("③ 生成草案（参考资料模式只生成 Word，不生成 PPT）")
     wp = os.path.join(args.output, "论文草案.docx")
-    wp = _build_with_retry(docx_builder.build, thesis, wp)
+    wp = _build_with_retry(BUILDERS["word"].build, thesis, wp)
     if not wp:
         return 1
     print(f"  ✔ Word: {wp}")
@@ -244,6 +247,9 @@ def main():
     ap.add_argument("--ocr", action="store_true",
                     help="对扫描件 PDF 启用 OCR 识别（需安装 pytesseract + pdf2image，"
                          "未安装时优雅报错）")
+    ap.add_argument("--extract-pdf-images", action="store_true",
+                    help="提取 PDF 内嵌图片为 image 块（默认关，因可能量大；"
+                         "需安装 pypdf，未安装时优雅降级）")
     ap.add_argument("--search-literature", metavar="SOURCE",
                     nargs="?", const="openalex", default=None,
                     help="refs 模式启用语义文献检索（OpenAlex/Semantic Scholar，"
@@ -271,7 +277,8 @@ def main():
 
     print("=" * 56)
     print("① 读取源文件")
-    docs, errors = gather_docs(args.input, ocr=args.ocr)
+    docs, errors = gather_docs(args.input, ocr=args.ocr,
+                               extract_images=args.extract_pdf_images)
     if not docs:
         print("\n⚠ 未读取到任何文件。请把 Word/PDF/TXT/Markdown/JSON/Excel/图片"
               "放进 input/ 后重试。")
@@ -336,30 +343,30 @@ def main():
     ok = True
     outputs = []
     ppt_warnings: list = []
-    if args.only != "ppt":
-        wp = os.path.join(args.output, "论文草案.docx")
-        wp = _build_with_retry(docx_builder.build, thesis, wp)
-        if wp:
-            outputs.append(wp)
-            print(f"  ✔ Word: {wp}")
-            if args.refresh_fields or args.pdf:
-                from src import postprocess
-                postprocess.refresh_word_fields(wp, export_pdf=args.pdf)
-        else:
-            ok = False
-    if args.only != "word":
-        pp = os.path.join(args.output, "答辩PPT草案.pptx")
-        result = _build_with_retry(pptx_builder.build, deck, pp)
+    # T4-4：按注册顺序遍历构建器；--only 排除未选中的构建器。
+    # 数据与产物名映射保留在 main 层（thesis→word、deck→ppt）。
+    draft_data = {"word": thesis, "ppt": deck}
+    draft_output = {"word": "论文草案.docx", "ppt": "答辩PPT草案.pptx"}
+    for bname in builder_names():
+        if args.only and args.only != bname:
+            continue
+        builder = BUILDERS[bname]
+        out = os.path.join(args.output, draft_output[bname])
+        result = _build_with_retry(builder.build, draft_data[bname], out)
         if result:
-            pp = result
-            outputs.append(pp)
-            print(f"  ✔ PPT : {pp}")
-            # BuildResult 携带告警列表（T0-4）
-            ppt_warnings = getattr(result, "warnings", [])
-            # T2-4：PPT 也导出 PDF（仅 Windows+Office）
-            if args.pdf:
+            outputs.append(str(result))
+            print(f"  ✔ {builder.label}: {result}")
+            # T4-4：后处理仍按构建器类型分支（word 刷域 / ppt 导出 PDF + 告警）
+            if bname == "word" and (args.refresh_fields or args.pdf):
                 from src import postprocess
-                postprocess.export_pptx_to_pdf(pp)
+                postprocess.refresh_word_fields(result, export_pdf=args.pdf)
+            elif bname == "ppt":
+                # BuildResult 携带告警列表（T0-4）
+                ppt_warnings = getattr(result, "warnings", [])
+                # T2-4：PPT 也导出 PDF（仅 Windows+Office）
+                if args.pdf:
+                    from src import postprocess
+                    postprocess.export_pptx_to_pdf(result)
         else:
             ok = False
 

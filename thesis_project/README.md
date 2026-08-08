@@ -81,6 +81,7 @@ python src/main.py --dry-run                   # 检查可读性/模式/外发�
 python src/main.py --llm --yes                 # 非交互环境确认 LLM 外发
 python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
 python src/main.py --ocr                        # 对扫描件 PDF 启用 OCR（需 pytesseract + pdf2image）
+python src/main.py --extract-pdf-images         # 提取 PDF 内嵌图片为 image 块（需 pypdf，默认关）
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
 python src/main.py --search-literature          # refs 模式启用语义文献检索（OpenAlex/S2，默认关）
 python src/main.py --report 报告.json           # 自定义运行报告输出路径
@@ -267,3 +268,35 @@ PPT 内容比例、媒体分页等字段是真实生效的，可通过 YAML 模�
 `minimal_gray`（简约灰）、`campus_red`（院校红）、`dark`（深色）、`forest_green`（森林绿），
 切换后 PPT 配色随之变化；也可单独覆盖 `primary_rgb`/`accent_rgb` 等字段与预设共存。
 `PPT_SPEC["structure"]` 的页数范围仍只用于校验与告警。
+
+### 扩展：读取器与构建器插件化（T4-3 / T4-4）
+
+读取器与构建器已改为注册器模式，第三方可不改核心代码地新增输入格式或输出产物。
+
+**新增读取器**（`src/readers.py`）：用 `@register_reader` 装饰器注册扩展名，
+注册后 `read_file` / `read_dir_detailed` 自动识别：
+
+```python
+from src.readers import register_reader, _block, Document
+
+@register_reader(".xyz")
+def read_xyz(path: str) -> Document:
+    return {"source": path, "type": "xyz",
+            "blocks": [_block("paragraph", "XYZ 内容")], "meta": {}}
+```
+
+**新增构建器**（`src/builders/base.py`）：继承 `Builder` 并用 `@register_builder` 注册，
+`--only` choices 与 draft 生成循环自动纳入：
+
+```python
+from src.builders.base import Builder, register_builder
+
+@register_builder("html", ".html", label="HTML")
+class HtmlBuilder(Builder):
+    def build(self, data, out_path):
+        ...  # 生成 HTML 产物
+        return out_path
+```
+
+`Block` / `Document` 现以 `TypedDict` 显式定义契约（T4-5），运行时仍为普通 dict，
+向后完全兼容；`kind`/`level`/`text` 为必填，`rows`/`data`/`ext` 按需出现。
