@@ -415,7 +415,8 @@ def _add_three_line_table(doc, rows, ci, ti):
             cell.text = row[c_i] if c_i < len(row) else ""
             for p in cell.paragraphs:
                 for run in p.runs:
-                    _set_run_font(run, "宋体", "Times New Roman", 10.5,
+                    _set_run_font(run, "宋体", "Times New Roman",
+                                  W.get("table", {}).get("font_size_pt", 10.5),
                                   bold=(r_i == 0))
     _set_three_line_borders(tbl)
     if spec.get("caption_position", "above") != "above":
@@ -428,7 +429,8 @@ def _add_image(doc, img, ci, fi):
     p = doc.add_paragraph()
     p.alignment = _ALIGN["center"]
     try:
-        p.add_run().add_picture(io.BytesIO(img["data"]), width=Cm(14))
+        p.add_run().add_picture(io.BytesIO(img["data"]),
+                                width=Cm(W.get("figure", {}).get("width_cm", 14)))
     except Exception:  # noqa: BLE001 损坏/不支持的图片格式
         # 占位文字写入同一居中段落，仍输出题注以保持编号连续
         run = p.add_run("<图片插入失败，请手工补图>")

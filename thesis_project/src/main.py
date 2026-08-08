@@ -340,6 +340,10 @@ def main():
             print(f"  ✔ PPT : {pp}")
             # BuildResult 携带告警列表（T0-4）
             ppt_warnings = getattr(result, "warnings", [])
+            # T2-4：PPT 也导出 PDF（仅 Windows+Office）
+            if args.pdf:
+                from src import postprocess
+                postprocess.export_pptx_to_pdf(pp)
         else:
             ok = False
 

@@ -283,17 +283,29 @@ def rebuild_deck(thesis: dict) -> dict:
 # ---------------------------------------------------------------------------
 _NOTES_SYS = ("你是答辩教练。为每页幻灯片写80~120字的口语化演讲备注，"
               "只依据给定要点组织语言，不得编造数据或结论。"
+              "在备注开头用【约X秒】标注预计讲解时长（X=页数占比×总时长）。"
               '只输出 JSON：{"页标题": "备注", ...}')
 
 
-def add_speaker_notes(deck: dict) -> bool:
+def _estimate_duration(slide_title: str, total_slides: int,
+                       talk_minutes: int) -> str:
+    """T2-5：按页数占比估算每页讲解时长。"""
+    if total_slides <= 0 or talk_minutes <= 0:
+        return ""
+    seconds = max(30, round(talk_minutes * 60 / total_slides))
+    return f"【约{seconds}秒】"
+
+
+def add_speaker_notes(deck: dict, talk_minutes: int = 10) -> bool:
     """为 content 页生成演讲备注写入 slide["notes"]；失败不影响主流程。
 
+    T2-5：备注含预计时长（对标 PPT_SPEC.principle.talk_minutes）+ AI 标记。
     返回是否成功（无 content 页视为成功），供调用方决定完成提示。
     """
     contents = [s for s in deck.get("slides", []) if s.get("type") == "content"]
     if not contents:
         return True
+    total_slides = len(deck.get("slides", []))
     payload = {s.get("title", ""): s.get("bullets", []) for s in contents}
     try:
         data = _chat_json(_NOTES_SYS, json.dumps(payload, ensure_ascii=False))
@@ -307,7 +319,9 @@ def add_speaker_notes(deck: dict) -> bool:
     for s in contents:
         note = norm.get(_norm_title(s.get("title", "")))
         if isinstance(note, str) and note.strip():
-            s["notes"] = f"{AI_MARK} {note.strip()}"
+            duration = _estimate_duration(s.get("title", ""), total_slides,
+                                          talk_minutes)
+            s["notes"] = f"{AI_MARK} {duration}{note.strip()}".strip()
     return True
 
 
@@ -460,8 +474,10 @@ def enhance(thesis: dict, deck: dict, docs: list):
     except Exception as e:  # noqa: BLE001
         print(f"  [LLM告警] PPT 大纲重建失败，保留规则结果：{e}")
     try:
-        if add_speaker_notes(deck):
-            print("  [LLM] 演讲备注生成完成")
+        from config.format_spec import PPT_SPEC
+        talk_min = PPT_SPEC.get("principle", {}).get("talk_minutes", 10)
+        if add_speaker_notes(deck, talk_minutes=talk_min):
+            print("  [LLM] 演讲备注生成完成（含时长估算）")
     except Exception as e:  # noqa: BLE001
         print(f"  [LLM告警] 演讲备注失败：{e}")
     return thesis, deck

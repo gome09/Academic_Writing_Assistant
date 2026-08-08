@@ -241,6 +241,10 @@ ppt:
 
 运行：`python src/main.py --format-template format.yml`。未知字段和类型错误会在
 生成前直接报错；尺寸与范围仍应按示例和本校规范填写有效值。
+`--pdf` 参数现同时为 Word 和 PPT 导出 PDF（T2-4，仅 Windows+Office，无 Office 时优雅降级）。
+PPT 布局参数（`table_max_rows`/`table_max_cols`/`chars_per_line_text`/`chars_per_line_media`）
+与 Word 图片宽度（`figure.width_cm`）、表格字号（`table.font_size_pt`）现可通过 YAML 调整（T2-3）。
+`principle.talk_minutes` 已落实（T2-5），演讲备注含预计讲解时长。
 `format_spec.py` 中标注 `# 暂未落实` 的字段（包括 `10/20/30` 原则、`figure.caption_position`、
 `figure/table.number_by_chapter`、`table.style` 等）仅作文档参考，修改不会影响产物。
 与之相对，`table.caption_position`、`figure/table.caption_align` 以及页面方向、

@@ -98,6 +98,7 @@ WORD_SPEC = {
         "caption_align": "center",
         "number_by_chapter": True,     # 图2-1（暂未落实，当前固定按章编号）
         "prefix": "图",
+        "width_cm": 14,               # T2-3：图片插入宽度（厘米）
     },
     "table": {
         "caption_position": "above",   # 表题在上（暂未落实，当前固定在上方）
@@ -105,6 +106,7 @@ WORD_SPEC = {
         "number_by_chapter": True,     # 表2-1（暂未落实，当前固定按章编号）
         "prefix": "表",
         "style": "three_line",         # 三线表（暂未落实，当前固定三线表样式）
+        "font_size_pt": 10.5,          # T2-3：表格字号
     },
 
     # ---- 页码 ----
@@ -157,6 +159,10 @@ PPT_SPEC = {
         "content_max_ratio": 0.66,     # 内容 <= 2/3 页面
         "text_align": "left",          # left | center | right
         "background": "white",         # 暂未落实（白底利于表格/公式/数据）
+        "table_max_rows": 8,           # T2-3：PPT 表格最多展示行数
+        "table_max_cols": 6,           # T2-3：PPT 表格最多展示列数
+        "chars_per_line_text": 44,     # T2-3：纯文本页每行字符数（行宽估算）
+        "chars_per_line_media": 26,    # T2-3：含媒体页每行字符数
     },
 
     # ---- 结构（15~20 页；问题->方法->结果->启示）----
@@ -174,7 +180,7 @@ PPT_SPEC = {
     "principle": {
         "total_slides_min": 15,
         "total_slides_max": 20,
-        "talk_minutes": 10,            # 暂未落实
+        "talk_minutes": 10,            # T2-5 已落实：演讲备注时长估算基准
         "rule": "10/20/30",            # 暂未落实（10页/20分钟/字号>=30）
         "narrative": ["问题", "方法", "结果", "启示"],  # 暂未落实
     },

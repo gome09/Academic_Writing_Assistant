@@ -225,8 +225,10 @@ def _render_media(slide, media, left, top, width, height, warnings=None):
     rows = media.get("rows") or []
     if not rows:
         return
-    rows = rows[:8]
-    n_cols = min(max(len(r) for r in rows), 6)
+    max_rows = P["layout"].get("table_max_rows", 8)
+    max_cols = P["layout"].get("table_max_cols", 6)
+    rows = rows[:max_rows]
+    n_cols = min(max(len(r) for r in rows), max_cols)
     shape = slide.shapes.add_table(len(rows), n_cols, Inches(left), Inches(top),
                                    Inches(width), Inches(height))
     table = shape.table
@@ -381,7 +383,8 @@ def _check_content_limits(slides, warnings=None):
     for idx, slide in enumerate(slides, 1):
         if slide.get("type") != "content":
             continue
-        chars_per_line = 26 if slide.get("media") else 44
+        chars_per_line = P["layout"].get("chars_per_line_media", 26) \
+            if slide.get("media") else P["layout"].get("chars_per_line_text", 44)
         for bullet in slide.get("bullets", []):
             if math.ceil(_display_width(bullet) / chars_per_line) > max_lines:
                 _warn(f"PPT 第 {idx} 页要点可能超过 {max_lines} 行："
@@ -389,9 +392,11 @@ def _check_content_limits(slides, warnings=None):
         for media in slide.get("media", []):
             if media.get("kind") == "table":
                 cols = max((len(r) for r in media.get("rows") or []), default=0)
-                if cols > 6:
+                max_cols = P["layout"].get("table_max_cols", 6)
+                if cols > max_cols:
                     _warn(f"PPT 第 {idx} 页表格有 {cols} 列，"
-                          "PPT 仅展示前 6 列，请在 Word 中查看完整表格。", warnings)
+                          f"PPT 仅展示前 {max_cols} 列，请在 Word 中查看完整表格。",
+                          warnings)
 
 
 def _check_shape_bounds(prs, warnings=None):

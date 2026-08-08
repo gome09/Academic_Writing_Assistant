@@ -1,12 +1,52 @@
 # -*- coding: utf-8 -*-
-"""T2-1/T2-2: PPT 结构配置驱动生成 + 主题包系统测试。"""
+"""T2-1/T2-2/T2-3: PPT 结构配置驱动 + 主题包 + 布局参数化测试。"""
 from __future__ import annotations
 
 import copy
 
-from config.format_spec import PPT_SPEC, THEME_PRESETS, _PPT_DEFAULTS
+from config.format_spec import PPT_SPEC, WORD_SPEC, THEME_PRESETS, _PPT_DEFAULTS
 from config.template import apply_template
 from src.organizer import _build_deck
+
+
+# ---------------------------------------------------------------------------
+#  T2-3: 布局参数化——配置字段存在且被消费
+# ---------------------------------------------------------------------------
+def test_layout_params_exist():
+    """T2-3：布局参数字段存在于配置中。"""
+    layout = PPT_SPEC["layout"]
+    assert "table_max_rows" in layout
+    assert "table_max_cols" in layout
+    assert "chars_per_line_text" in layout
+    assert "chars_per_line_media" in layout
+    assert layout["table_max_rows"] == 8
+    assert layout["table_max_cols"] == 6
+    assert layout["chars_per_line_text"] == 44
+    assert layout["chars_per_line_media"] == 26
+
+
+def test_word_layout_params_exist():
+    """T2-3：Word 表格字号和图片宽度字段存在。"""
+    assert WORD_SPEC["figure"]["width_cm"] == 14
+    assert WORD_SPEC["table"]["font_size_pt"] == 10.5
+
+
+def test_layout_params_yaml_overridable(tmp_path):
+    """T2-3：布局参数可通过 YAML 覆盖。"""
+    path = tmp_path / "layout.yml"
+    path.write_text("ppt:\n  layout:\n    table_max_rows: 5\n    table_max_cols: 4\n",
+                    encoding="utf-8")
+    apply_template(str(path))
+    assert PPT_SPEC["layout"]["table_max_rows"] == 5
+    assert PPT_SPEC["layout"]["table_max_cols"] == 4
+    # 还原
+    PPT_SPEC.clear()
+    PPT_SPEC.update(copy.deepcopy(_PPT_DEFAULTS))
+
+
+def test_principle_talk_minutes_implemented():
+    """T2-5：talk_minutes 已落实（不再是'暂未落实'）。"""
+    assert PPT_SPEC["principle"]["talk_minutes"] == 10
 
 
 def _meta(title="测试论文", author="张三"):
