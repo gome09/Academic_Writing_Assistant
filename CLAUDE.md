@@ -21,7 +21,7 @@ Claude 在本仓库工作时必须先读取并遵守根目录 `AGENTS.md`。本�
 - `refs` 模式只生成 Word；普通模式默认生成 Word 和 PPT。
 - `llm_enhancer.py` 不是 draft 专属：`refs` 用它做前置可用性检查，并复用 `_chat_json` 作为唯一 LLM 出口。只有「draft 的增强步骤」才受 `--llm` 开关控制。
 - Crossref 默认关闭；LLM 外发需要确认；dry-run 不允许网络调用。注意确认环节有第三条豁免 `PYTEST_CURRENT_TEST`，仅供测试。
-- 扫描版 PDF 不做 OCR；PDF 内嵌图片一律不导入。
+- 扫描版 PDF 默认不做 OCR（加 `--ocr` 可启用）；PDF 内嵌图片默认不导入（加 `--extract-pdf-images` 可提取）。
 - AI 正文保留 `<AI生成，请核对>`；未知内容保留 `<请填写>` 或 `«请补全…»` 参考文献占位符。
 - `output/运行日志.log` 当前只由 `pptx_builder.py` 写入告警，不是全流程日志。
 

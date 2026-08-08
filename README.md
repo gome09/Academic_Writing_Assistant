@@ -29,7 +29,7 @@ Windows 用户可直接双击 `thesis_project/run.bat`。
 
 - Crossref 元数据查询默认关闭，需显式 `--lookup-metadata`。
 - 向 LLM 端点外发资料前需要确认；`--dry-run` 不允许任何网络调用。
-- 扫描版 PDF 不做 OCR，PDF 内嵌图片一律不导入。
+- 扫描版 PDF 默认不做 OCR，PDF 内嵌图片默认不导入；需分别显式 `--ocr` / `--extract-pdf-images` 启用。
 
 ## 文档
 

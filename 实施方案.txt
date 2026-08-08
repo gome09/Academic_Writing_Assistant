@@ -1,0 +1,95 @@
+================================================================
+论文草案生成器 · 后续任务实施方案
+编制日期：2026-08-08
+依据：docs/plans/thesis-assistant-gap-analysis-and-roadmap.md
+================================================================
+
+【状态更新（2026-08-08）】
+本方案所列全部任务已实现并配套测试（配合 git 提交）。以下各任务均标注 ✅ 已完成。
+剩余未实施项仅为路线图中的战略可选任务（T3-4 RAG、T5-3 WebUI、T5-4 模板市场），
+与本方案无直接冲突，见文末 DEFER 说明。
+
+【当前进度判定】
+路线图 P0/P1 推荐任务已全部完成（commit 至 a15f6c7）：
+  - 阶段0 地基：c1a3c09 ✅
+  - 阶段1 参考文献：fdf9e11 + 8b2baa9 ✅（T1-1~T1-5）
+  - 阶段2 PPT：ef0cd55 + e05cd22 ✅（T2-1~T2-5）
+  - 阶段3 AI深化：87e0873 + a15f6c7 ✅（T3-1/2/3/5/6）
+  - 阶段4 T4-1 OCR：308506d ✅
+  测试 374 passed，ruff 通过。
+
+【剩余任务】（均为 P2/战略可选）—— 本方案撰写后已全部落地 ✅
+  阶段4：T4-2 PDF图片提取 ✅ / T4-3 readers插件化 ✅ / T4-4 builder插件化 ✅ / T4-5 schema ✅
+  阶段2：T2-6 AI配图占位与图表 ✅（可选）
+  阶段3：T3-4 RAG ⏸（较重，可延后 → 本轮 DEFER）
+  阶段5：T5-1 缓存 ✅ / T5-2 流式 ✅ / T5-3 WebUI ⏸ / T5-4 模板市场 ⏸（战略可选）
+
+================================================================
+执行计划（分阶段，每阶段完成后 git commit）
+================================================================
+
+----------------------------------------
+阶段 A · 完成阶段4 输入扩展与插件化  ✅ 已全部完成
+----------------------------------------
+A1. T4-5 Document/blocks schema ✅
+    - readers.py 顶部用 TypedDict 显式定义 Block / Document 契约
+    - 运行时仍为 dict（TypedDict 仅类型层），完全向后兼容
+    - _block / 各 read_* 标注返回类型；iter_node_blocks 兼容层保留
+    - 新增 test_readers_schema.py 验证契约字段
+
+A2. T4-2 PDF 内嵌图片提取 ✅
+    - 新增 --extract-pdf-images（默认关，因可能量大）
+    - read_pdf(path, ocr, extract_images=False)：用 pypdf.page.images 取 .data/.name
+    - pypdf 为可选依赖（沿用 OCR 模式：try import + 优雅降级 + monkeypatch 测试）
+    - 不新增网络出口；默认关
+    - 新增 test_readers_pdf_images.py
+
+A3. T4-3 readers 插件化 ✅
+    - _READERS 改为注册器：register_reader(*exts) 装饰器 + _READERS dict
+    - 现有 read_* 用装饰器注册；read_file / read_dir_detailed 走注册器
+    - 第三方可注册读取器；现有行为不变
+    - 新增 test_readers_register.py
+
+A4. T4-4 builder 插件化 ✅
+    - 新增 src/builders/base.py：Builder ABC（name/ext/build）+ BUILDERS 注册器
+    - docx_builder / pptx_builder 注册；main.py --only choices 动态取自注册器
+    - refs 模式仍显式只用 word builder（保留语义）
+    - 新增 test_builders_base.py
+
+----------------------------------------
+阶段 B · 完成阶段2 可选任务 T2-6  ✅ 已完成
+----------------------------------------
+B1. T2-6 AI 配图占位与图表 ✅
+    - pptx_builder：表格数据可生成 python-pptx 原生图表（柱/折线/饼）替代纯文本
+    - AI 配图以"占位框 + 图题建议"形式，不强制文生图，保持本地可用
+    - 无 LLM 也能用；新增 test_pptx_chart.py
+
+----------------------------------------
+阶段 C · 阶段5 高价值任务  ✅ 已完成
+----------------------------------------
+C1. T5-1 增量/缓存 ✅
+    - 新增 src/cache.py：基于输入文件哈希缓存中间 Document/thesis 结构
+    - 未变文件跳过重读重整；缓存失效正确
+    - dry-run 不写缓存；新增 test_cache.py
+
+C2. T5-2 流式输出 ✅
+    - llm_enhancer LLM 调用支持流式回显；可降级非流式
+    - 新增 test_llm_stream.py（monkeypatch）
+
+----------------------------------------
+本轮 DEFER（附理由）
+----------------------------------------
+  - T3-4 RAG：需 sentence-transformers 重依赖，路线图标"较重，可延后"
+  - T5-3 本地 Web UI / T5-4 模板市场：P3 战略可选，体量大，宜单独评估
+
+================================================================
+每阶段交付前验证（遵循 AGENTS.md）
+================================================================
+  1. cd thesis_project && python -m pytest 全量通过
+  2. python -m ruff check src tests config 通过
+  3. 修复/新增类任务先加测试再改实现
+  4. LLM/网络类测试用 monkeypatch，不触真实网络
+  5. 新增行为同步更新 README.md / docs/ARCHITECTURE.md
+  6. 配置变更同步检查 template.py / 构建器缓存常量 / YAML 模板测试
+  7. 提交时逐个写出文件路径，禁用 git add . / git add -A
+================================================================

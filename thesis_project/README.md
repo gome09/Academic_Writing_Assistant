@@ -109,7 +109,7 @@ pip install -r requirements-office.txt     # 可选：Word COM
 - **Markdown**：用 `#`/`##` 作章/节标题，YAML frontmatter 写 `title/author/keywords`（见 `sample_input/thesis_draft.md`）。
 - **Word (.docx)**：正文里用「标题 1/标题 2」样式的段落会被识别为章/节。
 - **JSON**：支持 `{title, content, children:[...]}` 递归结构；也支持任意数据（会平铺为段落）。
-- **PDF**：按页面文本行重组段落并识别编号标题；扫描版 PDF 没有文本层时会明确报错。**PDF 内嵌图片一律不导入**（只在控制台提示），需要配图请另存为图片文件放进 `input/`。
+- **PDF**：按页面文本行重组段落并识别编号标题；扫描版 PDF 没有文本层时会明确报错，加 `--ocr` 可启用 OCR（需 pytesseract + pdf2image）。**PDF 内嵌图片默认不导入**（只在控制台提示），需要配图可加 `--extract-pdf-images` 提取为 image 块，或另存为图片文件放进 `input/`。
 - **TXT（.txt / .text）**：按空行分段读取；无显式标题时会套用标准章节骨架并保持原文顺序。
 - **Excel（.xlsx）**：每个非空工作表分别成为一个表格块。**CSV（.csv）**：整份文件只产出一个表格块。
 - **图片（.png / .jpg / .jpeg / .bmp / .webp）**：读取为图片内容；可随 Word/PPT 草案一起排版。
