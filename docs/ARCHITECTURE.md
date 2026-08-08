@@ -68,8 +68,9 @@ Crossref 查询默认关闭，仅 `--lookup-metadata` 显式启用，并缓存�
 - Word 域刷新/PDF 导出：`requirements-office.txt`，仅 Windows + Microsoft Word
 - LLM 网络请求：`llm_enhancer.py` 和 `llm_vision.py`
 - Crossref 网络请求：`references.py`，仅显式启用元数据查询时发生
+- 文献检索网络请求：`literature_search.py`（OpenAlex / Semantic Scholar），仅 `--search-literature` 显式启用时发生，免费无密钥
 
-启用 LLM 时，交互环境需确认外发；非交互环境需 `--yes` 或 `THESIS_LLM_CONSENT=1`。另有第三条豁免：环境变量 `PYTEST_CURRENT_TEST` 存在时（即 pytest 运行中）确认环节被直接跳过，该变量仅供测试使用，不应在生产环境设置。`--dry-run` 不调用任何外部服务。无可读输入、拒绝外发、`refs` 前置检查失败或 `refs` 的 Word 写盘失败会在运行报告写入前退出。
+启用 LLM 时，交互环境需确认外发；非交互环境需 `--yes` 或 `THESIS_LLM_CONSENT=1`。`PYTEST_CURRENT_TEST` 存在且 pytest 已加载时跳过外发确认（T0-1 加固：生产环境误设不再绕过）。`--dry-run` 不调用任何外部服务。`--search-literature` 同样需外发确认。无可读输入、拒绝外发、`refs` 前置检查失败或 `refs` 的 Word 写盘失败会在运行报告写入前退出。
 
 产物写盘时若目标文件被 Word/WPS 占用，`main.py` 的 `_build_with_retry` 会依次改名重试（`论文草案(2).docx` 等，最多 5 个候选），全部失败才判定构建失败。`draft` 运行报告额外记录逐文件读取失败列表 `read_errors` 与 `pptx_builder` 的告警。报告默认写入 `output/运行报告.json`，可用 `--report` 改路径。
 

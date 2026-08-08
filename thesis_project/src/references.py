@@ -254,6 +254,23 @@ def validate_citations(paragraphs: list[str], allowed_ids: set[int], total: int)
     return issues
 
 
+def check_orphan_references(all_paragraphs: list[str], total_refs: int) -> list[str]:
+    """T1-5：检查是否有文献从未被引用（孤立文献），返回告警列表。
+
+    遍历所有综述段落的 [n] 引用，汇总被引编号集合，
+    与 1..total_refs 比对，未被引的文献给出告警。
+    """
+    if total_refs <= 0:
+        return []
+    cited: set[int] = set()
+    for para in all_paragraphs or []:
+        for group in _CITE_RE.findall(para or ""):
+            ids = [int(x) for x in re.split(r"\s*[,，]\s*", group)]
+            cited.update(ids)
+    orphans = [i for i in range(1, total_refs + 1) if i not in cited]
+    return [f"文献[{i}]在正文中从未被引用（孤立文献）" for i in orphans]
+
+
 def lookup_crossref(title: str, doi: str = "", cache_path: str | None = None) -> dict:
     """Optional explicit Crossref lookup; never called by default.
 

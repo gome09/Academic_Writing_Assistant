@@ -82,6 +82,7 @@ python src/main.py --llm --yes                 # 非交互环境确认 LLM 外�
 python src/main.py --format-template school.yml # 使用外部 YAML 格式模板
 python src/main.py --ocr                        # 对扫描件 PDF 启用 OCR（需 pytesseract + pdf2image）
 python src/main.py --lookup-metadata           # refs 模式显式查询 Crossref
+python src/main.py --search-literature          # refs 模式启用语义文献检索（OpenAlex/S2，默认关）
 python src/main.py --report 报告.json           # 自定义运行报告输出路径
 ```
 
@@ -188,6 +189,9 @@ python src/main.py --llm
 - **必须**设置 `LLM_API_KEY`（见上节），未设置会报错退出；
 - 默认不查询外部文献数据库；只有传 `--lookup-metadata` 才会访问 Crossref，
   查询结果缓存于 `.cache/reference_metadata.json`；
+- `--search-literature [openalex|s2|both]` 可启用语义文献检索（T1-4），
+  按论文题目查询 OpenAlex / Semantic Scholar 免费 API（无需密钥），
+  检索结果作为补充参考资料合并到文献卡片中；默认关，需外发确认；
 - `--mode refs|draft` 可强制指定模式，覆盖自动检测。
 
 `--dry-run` 只检查文件可读性、识别出的模式和外发清单，不校验 `refs` 正式运行所需的

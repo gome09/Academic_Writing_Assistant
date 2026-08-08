@@ -129,9 +129,22 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
         return rc
     from src import synthesizer
     print("② 综合参考资料（LLM）")
+    # T1-4：可选语义文献检索（默认关，需 --search-literature + 外发确认）
+    search_cards = None
+    if args.search_literature:
+        from src import literature_search
+        from src.synthesizer import parse_topic
+        topic = parse_topic(topic_doc)
+        query = topic["title"] or topic["background"][:200]
+        print(f"  [文献检索] 检索源={args.search_literature}，查询：{query[:60]}")
+        results = literature_search.search_literature(
+            query, source=args.search_literature)
+        search_cards = literature_search.results_to_cards(results)
+        print(f"  [文献检索] 获取到 {len(search_cards)} 条相关文献")
     thesis = synthesizer.synthesize(
         topic_doc, ref_docs, lookup_metadata=args.lookup_metadata,
-        cache_path=os.path.join(ROOT, ".cache", "reference_metadata.json"))
+        cache_path=os.path.join(ROOT, ".cache", "reference_metadata.json"),
+        search_cards=search_cards)
     print("③ 生成草案（参考资料模式只生成 Word，不生成 PPT）")
     wp = os.path.join(args.output, "论文草案.docx")
     wp = _build_with_retry(docx_builder.build, thesis, wp)
@@ -154,7 +167,7 @@ def _run_refs_mode(args, topic_doc, ref_docs) -> int:
 
 
 def _confirm_llm_transfer(args, docs, required=False) -> bool:
-    if not (args.llm or args.polish or required):
+    if not (args.llm or args.polish or args.search_literature or required):
         return True
     if not os.environ.get("LLM_API_KEY"):
         return True
@@ -164,6 +177,9 @@ def _confirm_llm_transfer(args, docs, required=False) -> bool:
     images = sum(b.get("kind") == "image" for d in docs for b in d["blocks"])
     print(f"  [LLM外发确认] 端点：{host}；文件：{len(docs)}；"
           f"文本约 {chars} 字符；图片 {images} 张")
+    if args.search_literature:
+        print(f"  [文献检索确认] 检索源：{args.search_literature}；"
+              f"查询将发送至外部 API")
     _logger.info("LLM外发确认：端点=%s 文件=%d 文本=%d字符 图片=%d张",
                  host, len(docs), chars, images)
     if args.yes or os.environ.get("THESIS_LLM_CONSENT") == "1" or (
@@ -224,6 +240,10 @@ def main():
     ap.add_argument("--ocr", action="store_true",
                     help="对扫描件 PDF 启用 OCR 识别（需安装 pytesseract + pdf2image，"
                          "未安装时优雅报错）")
+    ap.add_argument("--search-literature", metavar="SOURCE",
+                    nargs="?", const="openalex", default=None,
+                    help="refs 模式启用语义文献检索（OpenAlex/Semantic Scholar，"
+                         "免费无密钥；默认关；SOURCE: openalex|s2|both）")
     ap.add_argument("--dry-run", action="store_true",
                     help="仅检查输入可读性、模式和 LLM 外发清单，不调用外部服务或生成产物")
     ap.add_argument("--yes", action="store_true",
@@ -262,13 +282,15 @@ def main():
         mode = "refs" if topic_doc is not None else "draft"
 
     if args.dry_run:
-        if args.llm or args.polish or mode == "refs":
+        if args.llm or args.polish or args.search_literature or mode == "refs":
             _print_llm_transfer_summary(docs)
         from src.runtime_report import write_report
         write_report(args.report or os.path.join(args.output, "运行报告.json"),
                      {"status": "dry_run", "files": [d["source"] for d in docs],
                       "mode": mode,
-                      "llm_requested": bool(args.llm or args.polish or mode == "refs")})
+                      "llm_requested": bool(args.llm or args.polish
+                                            or args.search_literature
+                                            or mode == "refs")})
         print("  [dry-run] 已完成输入检查，未生成产物。")
         return 0
 

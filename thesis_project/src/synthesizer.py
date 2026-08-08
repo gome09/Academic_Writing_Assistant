@@ -32,8 +32,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.format_spec import REFS_SPEC
 from src.llm_enhancer import AI_MARK, _chat_json
 from src.organizer import PLACEHOLDER, _node
-from src.references import (entry_from_card, extract_local_metadata,
-                            format_reference,
+from src.references import (check_orphan_references, entry_from_card,
+                            extract_local_metadata, format_reference,
                             lookup_crossref, validate_citations)
 
 _VALID_KINDS = {"intro", "review", "core", "conclusion"}
@@ -385,8 +385,11 @@ def attach_media(chapters: list, media_docs: list, img_notes: list) -> None:
 #  总入口
 # ---------------------------------------------------------------------------
 def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
-               cache_path=None) -> dict:
-    """参考资料 -> thesis dict（与 organizer.organize 同构，仅 Word 用）。"""
+               cache_path=None, search_cards=None) -> dict:
+    """参考资料 -> thesis dict（与 organizer.organize 同构，仅 Word 用）。
+
+    search_cards: T1-4 可选，来自文献检索的预构造卡片，直接合并到 cards 列表。
+    """
     degraded: list = []  # T0-4：局部降级列表，随返回值传出
     topic = parse_topic(topic_doc)
     text_docs = [d for d in ref_docs if d["type"] not in _MEDIA_TYPES]
@@ -394,6 +397,10 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
 
     print(f"  文献 {len(text_docs)} 篇，数据/截图 {len(media_docs)} 个")
     cards = make_cards(text_docs, degraded)
+    # T1-4：合并文献检索结果（已预构造，跳过 LLM 摘要卡步骤）
+    if search_cards:
+        cards.extend(search_cards)
+        print(f"  [文献检索] 合并 {len(search_cards)} 条检索结果卡")
     if lookup_metadata:
         for card in cards:
             try:
@@ -454,6 +461,15 @@ def synthesize(topic_doc: dict, ref_docs: list, lookup_metadata=False,
     from config.format_spec import WORD_SPEC
     ref_standard = WORD_SPEC.get("reference", {}).get("standard", "GB/T 7714")
     references = [format_reference(entry, ref_standard) for entry in reference_entries]
+
+    # T1-5：孤立文献检测——检查每个文献是否至少被综述引用一次
+    review_paras = []
+    for ch in chapters:
+        if ch.get("kind") == "review":
+            review_paras.extend(ch.get("paras", []))
+    orphan_issues = check_orphan_references(review_paras, len(cards))
+    for issue in orphan_issues:
+        print(f"  [提示] {issue}")
 
     if degraded:
         print(f"  [提示] 本次共 {len(degraded)} 步降级，请检查上方告警。")
